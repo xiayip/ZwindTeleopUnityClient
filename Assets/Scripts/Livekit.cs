@@ -27,6 +27,13 @@ public class Livekit : MonoBehaviour
     private Vector3 initialRightControllerPosition;
     private Quaternion initialRightControllerRotation;
 
+    private bool first_enter = false;
+    
+    // Frame rate control for teleop mode
+    private float lastPublishTime = 0f;
+    private const float TARGET_FPS = 30f;
+    private const float PUBLISH_INTERVAL = 1f / TARGET_FPS; 
+
     // Start is called before the first frame update
     void Start()
     {   if (VideoStreamObject == null)
@@ -63,13 +70,20 @@ public class Livekit : MonoBehaviour
                 {
                     initialRightControllerPosition = OVRInput.GetLocalControllerPosition(OVRInput.Controller.RTouch);
                     initialRightControllerRotation = OVRInput.GetLocalControllerRotation(OVRInput.Controller.RTouch);
+                    first_enter = true;
+                    lastPublishTime = Time.time; // Reset the timer when entering teleop mode
                     UpdateInfoText("In Teleop Mode");
                 }
             }
             if (inTeleopMode)
             {
-                publishVelocityData();
-                publishEEPoseData();
+                // Frame rate control: only publish if enough time has passed
+                if (Time.time - lastPublishTime >= PUBLISH_INTERVAL)
+                {
+                    //publishVelocityData();
+                    publishEEPoseData();
+                    lastPublishTime = Time.time;
+                }
             }
             else
             {
@@ -195,8 +209,8 @@ public class Livekit : MonoBehaviour
 
     public void publishVelocityData()
     {
-        float vx = OVRInput.Get(OVRInput.RawAxis2D.RThumbstick).x;
-        float az = OVRInput.Get(OVRInput.RawAxis2D.RThumbstick).y;
+        float az = OVRInput.Get(OVRInput.RawAxis2D.RThumbstick).x;
+        float vx = OVRInput.Get(OVRInput.RawAxis2D.RThumbstick).y;
         // add to json
         var velocityData = new
         {
@@ -216,7 +230,7 @@ public class Livekit : MonoBehaviour
         };
         string str = JsonSerializer.Serialize(velocityData);
         //Debug.Log("publishVelocityData: vx=" + vx + ", az=" + az);
-        room.LocalParticipant.PublishData(System.Text.Encoding.Default.GetBytes(str), topic: "velocity");
+        room.LocalParticipant.PublishData(System.Text.Encoding.Default.GetBytes(str), reliable: false, topic: "velocity");
     }
 
     public void publishEEPoseData()
@@ -227,26 +241,38 @@ public class Livekit : MonoBehaviour
         Vector3 offsetPosition = position - initialRightControllerPosition;
         Quaternion offsetRotation = Quaternion.Inverse(initialRightControllerRotation) * rotation;
 
+        // Apply 180-degree rotation around Z-axis to both position and rotation
+        Quaternion zRotation180 = Quaternion.Euler(0, 0, -90);
+        Vector3 finalPosition = zRotation180 * offsetPosition;
+        Quaternion finalRotation = zRotation180 * offsetRotation;
+
         var eePoseData = new
         {
             position = new
             {
-                x = offsetPosition.x,
-                y = offsetPosition.y,
-                z = offsetPosition.z
+                x = finalPosition.x,
+                y = finalPosition.y,
+                z = finalPosition.z
             },
             rotation = new
             {
-                x = offsetRotation.x,
-                y = offsetRotation.y,
-                z = offsetRotation.z,
-                w = offsetRotation.w
+                x = finalRotation.x,
+                y = finalRotation.y,
+                z = finalRotation.z,
+                w = finalRotation.w
             },
+            first_enter = first_enter,
             timestamp = System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
         };
         string str = JsonSerializer.Serialize(eePoseData);
-        //Debug.Log("publishEEPoseData: offset position=" + offsetPosition + ", offset rotation=" + offsetRotation);
-        room.LocalParticipant.PublishData(System.Text.Encoding.Default.GetBytes(str), topic: "ee_pose");
+        //Debug.Log("publishEEPoseData: offset position=" + finalPosition + ", offset rotation=" + finalRotation);
+        room.LocalParticipant.PublishData(System.Text.Encoding.Default.GetBytes(str), reliable: false, topic: "ee_pose");
+        
+        // Reset first_enter flag after first publish
+        if (first_enter)
+        {
+            first_enter = false;
+        }
     }
 
     private void OnApplicationPause(bool pause)
