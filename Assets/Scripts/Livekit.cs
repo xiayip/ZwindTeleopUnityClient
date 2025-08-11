@@ -68,8 +68,8 @@ public class Livekit : MonoBehaviour
                 inTeleopMode = !inTeleopMode;
                 if (inTeleopMode)
                 {
-                    initialRightControllerPosition = OVRInput.GetLocalControllerPosition(OVRInput.Controller.RTouch);
-                    initialRightControllerRotation = OVRInput.GetLocalControllerRotation(OVRInput.Controller.RTouch);
+                    (initialRightControllerPosition, initialRightControllerRotation) = getControllerPose();
+                    Debug.Log("Entering Teleop Mode: initialRightControllerRotation=" + initialRightControllerRotation);
                     first_enter = true;
                     lastPublishTime = Time.time; // Reset the timer when entering teleop mode
                     UpdateInfoText("In Teleop Mode");
@@ -235,37 +235,22 @@ public class Livekit : MonoBehaviour
 
     public void publishEEPoseData()
     {
-        Vector3 position = OVRInput.GetLocalControllerPosition(OVRInput.Controller.RTouch);
-        Quaternion rotation = OVRInput.GetLocalControllerRotation(OVRInput.Controller.RTouch);
-
+        (Vector3 position, Quaternion rotation) = getControllerPose();
+        // calculate offset
         Vector3 offsetPosition = position - initialRightControllerPosition;
-        Quaternion offsetRotation = Quaternion.Inverse(initialRightControllerRotation) * rotation;
+        Quaternion offsetRotation =  rotation * Quaternion.Inverse(initialRightControllerRotation);
+        // convert to ROS2 pose
+        (Vector3 offsetPositionRos, Quaternion offsetRotationRos) = UnityPose2RosPose(offsetPosition, offsetRotation);
 
-        // Apply 180-degree rotation around Z-axis to both position and rotation
-        Quaternion zRotation180 = Quaternion.Euler(0, 0, -90);
-        Vector3 finalPosition = zRotation180 * offsetPosition;
-        Quaternion finalRotation = zRotation180 * offsetRotation;
-
-        var eePoseData = new
-        {
-            position = new
-            {
-                x = finalPosition.x,
-                y = finalPosition.y,
-                z = finalPosition.z
-            },
-            rotation = new
-            {
-                x = finalRotation.x,
-                y = finalRotation.y,
-                z = finalRotation.z,
-                w = finalRotation.w
-            },
-            first_enter = first_enter,
+        var eePoseData = new {
+            p = new float[] { offsetPositionRos.x, offsetPositionRos.y, offsetPositionRos.z },
+            q = new float[] { offsetRotationRos.x, offsetRotationRos.y, offsetRotationRos.z, offsetRotationRos.w },
+            first_enter = first_enter ? 1 : 0,
             timestamp = System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
         };
         string str = JsonSerializer.Serialize(eePoseData);
-        //Debug.Log("publishEEPoseData: offset position=" + finalPosition + ", offset rotation=" + finalRotation);
+        // debug: convert qtion to rpy to check if it is correct
+        //Debug.Log($"publishEEPoseData: position={offsetPositionRos}, rotation={offsetRotationRos.eulerAngles}, first_enter={first_enter}");
         room.LocalParticipant.PublishData(System.Text.Encoding.Default.GetBytes(str), reliable: false, topic: "ee_pose");
         
         // Reset first_enter flag after first publish
@@ -274,6 +259,23 @@ public class Livekit : MonoBehaviour
             first_enter = false;
         }
     }
+
+    private (Vector3, Quaternion) getControllerPose()
+    {
+        Vector3 position = OVRInput.GetLocalControllerPosition(OVRInput.Controller.RTouch);
+        Quaternion rotation = OVRInput.GetLocalControllerRotation(OVRInput.Controller.RTouch);
+        return (position, rotation);
+
+    }
+    private (Vector3, Quaternion) UnityPose2RosPose(Vector3 unityPos, Quaternion unityRot)
+    {
+        var (offsetPositionRos, offsetRotationRos) = CoordinateConverter.UnityToROS2.ConvertPose(unityPos, unityRot);
+        transform.position = offsetPositionRos;
+        transform.rotation = offsetRotationRos;
+        transform.RotateAround(Vector3.zero, Vector3.up, 0f); // Rotate around the Y-axis by 90 degrees
+        return (transform.position, transform.rotation);
+    }
+
 
     private void OnApplicationPause(bool pause)
     {
