@@ -13,6 +13,9 @@ public class Livekit : MonoBehaviour
     public string url = "wss://zwindz1-lam2j1uj.livekit.cloud";
     public string token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NjA3MzI5ODYsImlzcyI6IkFQSXduZkVoTmNUY2ZzQSIsIm5iZiI6MTc1MTczMjk4Niwic3ViIjoiVlIiLCJ2aWRlbyI6eyJjYW5QdWJsaXNoIjp0cnVlLCJjYW5QdWJsaXNoRGF0YSI6dHJ1ZSwiY2FuU3Vic2NyaWJlIjp0cnVlLCJyb29tIjoibXktcm9vbSIsInJvb21Kb2luIjp0cnVlfH0.oGMrOIDNqyilOWw-6FgqpSKBzyIEp7pZG_FkFtPXji8";
 
+    //public string url = "ws://47.111.148.68:7880";
+    //public string token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE4MjY5NjU3ODIsImlzcyI6InVuaXgiLCJuYW1lIjoidW5pdHkiLCJuYmYiOjE3NTQ5NjU3ODIsInN1YiI6InVuaXR5IiwidmlkZW8iOnsicm9vbSI6ImRpbmdkYW5nIiwicm9vbUpvaW4iOnRydWV9fQ.CADs5YcN1w5b7JJ8_WA_ruP_7NWIcKVZPkZ8SuwZChM";
+
     public GameObject VideoStreamObject;
 
     public TMP_Text infoText;
@@ -242,9 +245,12 @@ public class Livekit : MonoBehaviour
         // convert to ROS2 pose
         (Vector3 offsetPositionRos, Quaternion offsetRotationRos) = UnityPose2RosPose(offsetPosition, offsetRotation);
 
+        float gripper_value = getTriggerValue();
+
         var eePoseData = new {
             p = new float[] { offsetPositionRos.x, offsetPositionRos.y, offsetPositionRos.z },
             q = new float[] { offsetRotationRos.x, offsetRotationRos.y, offsetRotationRos.z, offsetRotationRos.w },
+            gripper = gripper_value,
             first_enter = first_enter ? 1 : 0,
             timestamp = System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
         };
@@ -265,8 +271,14 @@ public class Livekit : MonoBehaviour
         Vector3 position = OVRInput.GetLocalControllerPosition(OVRInput.Controller.RTouch);
         Quaternion rotation = OVRInput.GetLocalControllerRotation(OVRInput.Controller.RTouch);
         return (position, rotation);
-
     }
+
+    private float getTriggerValue()
+    {
+        float triggerValue = OVRInput.Get(OVRInput.RawAxis1D.RIndexTrigger);
+        return triggerValue;
+    }
+
     private (Vector3, Quaternion) UnityPose2RosPose(Vector3 unityPos, Quaternion unityRot)
     {
         var (offsetPositionRos, offsetRotationRos) = CoordinateConverter.UnityToROS2.ConvertPose(unityPos, unityRot);
