@@ -1,9 +1,10 @@
+using LiveKit;
+using LiveKit.Proto;
 using System;
 using System.Collections.Generic;
 using System.Text.Json;
-using LiveKit;
-using LiveKit.Proto;
 using UnityEngine;
+using static LiveKit.Proto.DataStream.Types;
 
 namespace LiveKitROS2Bridge
 {
@@ -109,6 +110,23 @@ namespace LiveKitROS2Bridge
             {
                 ["header"] = Header.ToDict(),
                 ["pose"] = Pose.ToDict()
+            };
+        }
+    }
+
+    public class Float64Message: ROS2Message
+    {
+        public double Data { get; set; }
+        public Float64Message()
+        {
+            MessageType = "std_msgs/msg/Float64";
+        }
+
+        public override Dictionary<string, object> ToDict()
+        {
+            return new Dictionary<string, object>
+            {
+                ["data"] = Data
             };
         }
     }

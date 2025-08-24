@@ -34,6 +34,7 @@ public class Livekit : MonoBehaviour
     private LiveKitROS2BridgeManager bridgeManager = null;
     private LiveKitROS2Publisher<TwistMessage> cmdVelPublisher = null;
     private LiveKitROS2Publisher<PoseStampedMessage> eePosePublisher = null;
+    private LiveKitROS2Publisher<Float64Message> gripperPublisher = null;
 
     // Frame rate control for teleop mode
     private float lastPublishTime = 0f;
@@ -85,8 +86,9 @@ public class Livekit : MonoBehaviour
                 // Frame rate control: only publish if enough time has passed
                 if (Time.time - lastPublishTime >= PUBLISH_INTERVAL)
                 {
-                    publishVelocityData();
-                    publishEEPoseData();
+                    PublishVelocityData();
+                    PublishEEPoseData();
+                    PublishTriggerValue();
                     lastPublishTime = Time.time;
                 }
             }
@@ -147,6 +149,7 @@ public class Livekit : MonoBehaviour
                 bridgeManager = new LiveKitROS2BridgeManager(room);
                 cmdVelPublisher = bridgeManager.CreatePublisher<TwistMessage>("cmd_vel");
                 eePosePublisher = bridgeManager.CreatePublisher<PoseStampedMessage>("ee_pose");
+                gripperPublisher = bridgeManager.CreatePublisher<Float64Message>("gripper");
                 UpdateConnectStatus("Connected");
                 UpdateButtonStatusText("Disonnect Robot");
                 UpdateInfoText("Press B to start Teleop");
@@ -215,7 +218,7 @@ public class Livekit : MonoBehaviour
         Debug.Log("DataReceived: from " + participant.Identity + ", data " + str);
     }
 
-    public void publishVelocityData()
+    public void PublishVelocityData()
     {
         float az = OVRInput.Get(OVRInput.RawAxis2D.RThumbstick).x;
         float vx = OVRInput.Get(OVRInput.RawAxis2D.RThumbstick).y;
@@ -228,7 +231,7 @@ public class Livekit : MonoBehaviour
         cmdVelPublisher.Publish(twistMsg);
     }
 
-    public void publishEEPoseData()
+    public void PublishEEPoseData()
     {
         (Vector3 position, Quaternion rotation) = getControllerPose();
         // calculate offset
@@ -257,10 +260,14 @@ public class Livekit : MonoBehaviour
         return (position, rotation);
     }
 
-    private float getTriggerValue()
+    private void PublishTriggerValue()
     {
         float triggerValue = OVRInput.Get(OVRInput.RawAxis1D.RIndexTrigger);
-        return triggerValue;
+        var gripperMsg = new Float64Message
+        {
+            Data = triggerValue
+        };
+        gripperPublisher.Publish(gripperMsg);
     }
 
     private (Vector3, Quaternion) UnityPose2RosPose(Vector3 unityPos, Quaternion unityRot)
