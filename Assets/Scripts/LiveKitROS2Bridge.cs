@@ -1,0 +1,391 @@
+using System;
+using System.Collections.Generic;
+using System.Text.Json;
+using LiveKit;
+using LiveKit.Proto;
+using UnityEngine;
+
+namespace LiveKitROS2Bridge
+{
+    /// <summary>
+    /// ROS2消息类型枚举
+    /// </summary>
+    public enum ROS2MessageType
+    {
+        GeometryTwist,
+        StdString,
+        SensorImage,
+        GeometryPoseStamped,
+        NavOdometry,
+        Custom
+    }
+
+    /// <summary>
+    /// ROS2消息基类
+    /// </summary>
+    public abstract class ROS2Message
+    {
+        public string MessageType { get; protected set; }
+        public double Timestamp { get; set; } = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0;
+
+        public abstract Dictionary<string, object> ToDict();
+    }
+
+    /// <summary>
+    /// Twist消息 (geometry_msgs/Twist)
+    /// </summary>
+    public class TwistMessage : ROS2Message
+    {
+        public Vector3 Linear { get; set; } = new Vector3();
+        public Vector3 Angular { get; set; } = new Vector3();
+
+        public TwistMessage()
+        {
+            MessageType = "geometry_msgs/msg/Twist";
+        }
+
+        public override Dictionary<string, object> ToDict()
+        {
+            return new Dictionary<string, object>
+            {
+                ["linear"] = new Dictionary<string, object>
+                {
+                    ["x"] = Linear.x,
+                    ["y"] = Linear.y,
+                    ["z"] = Linear.z
+                },
+                ["angular"] = new Dictionary<string, object>
+                {
+                    ["x"] = Angular.x,
+                    ["y"] = Angular.y,
+                    ["z"] = Angular.z
+                }
+            };
+        }
+    }
+
+    /// <summary>
+    /// String消息 (std_msgs/String)
+    /// </summary>
+    public class StringMessage : ROS2Message
+    {
+        public string Data { get; set; } = "";
+
+        public StringMessage()
+        {
+            MessageType = "std_msgs/msg/String";
+        }
+
+        public StringMessage(string data) : this()
+        {
+            Data = data;
+        }
+
+        public override Dictionary<string, object> ToDict()
+        {
+            return new Dictionary<string, object>
+            {
+                ["data"] = Data
+            };
+        }
+    }
+
+    /// <summary>
+    /// PoseStamped消息 (geometry_msgs/PoseStamped)
+    /// </summary>
+    public class PoseStampedMessage : ROS2Message
+    {
+        public HeaderMessage Header { get; set; } = new HeaderMessage();
+        public PoseMessage Pose { get; set; } = new PoseMessage();
+
+        public PoseStampedMessage()
+        {
+            MessageType = "geometry_msgs/msg/PoseStamped";
+        }
+
+        public override Dictionary<string, object> ToDict()
+        {
+            return new Dictionary<string, object>
+            {
+                ["header"] = Header.ToDict(),
+                ["pose"] = Pose.ToDict()
+            };
+        }
+    }
+
+    /// <summary>
+    /// 自定义消息支持
+    /// </summary>
+    public class CustomMessage : ROS2Message
+    {
+        public Dictionary<string, object> Data { get; set; } = new Dictionary<string, object>();
+
+        public CustomMessage(string messageType)
+        {
+            MessageType = messageType;
+        }
+
+        public override Dictionary<string, object> ToDict()
+        {
+            return new Dictionary<string, object>(Data);
+        }
+    }
+
+    public class HeaderMessage
+    {
+        public string FrameId { get; set; } = "";
+        public double Timestamp { get; set; } = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0;
+
+        public Dictionary<string, object> ToDict()
+        {
+            return new Dictionary<string, object>
+            {
+                ["frame_id"] = FrameId,
+                ["stamp"] = new Dictionary<string, object>
+                {
+                    ["sec"] = (int)Timestamp,
+                    ["nanosec"] = (int)((Timestamp - (int)Timestamp) * 1e9)
+                }
+            };
+        }
+    }
+
+    public class PoseMessage
+    {
+        public Vector3 Position { get; set; } = new Vector3();
+        public Quaternion Orientation { get; set; } = new Quaternion();
+
+        public Dictionary<string, object> ToDict()
+        {
+            return new Dictionary<string, object>
+            {
+                ["position"] = new Dictionary<string, object>
+                {
+                    ["x"] = Position.x,
+                    ["y"] = Position.y,
+                    ["z"] = Position.z
+                },
+                ["orientation"] = new Dictionary<string, object>
+                {
+                    ["x"] = Orientation.x,
+                    ["y"] = Orientation.y,
+                    ["z"] = Orientation.z,
+                    ["w"] = Orientation.w
+                }
+            };
+        }
+    }
+
+    /// <summary>
+    /// LiveKit ROS2 发布者
+    /// 提供类似ROS2 Publisher的接口，实际通过LiveKit Data Packets发送
+    /// </summary>
+    public class LiveKitROS2Publisher<T> where T : ROS2Message
+    {
+        private readonly Room _room;
+        private readonly string _topicName;
+        private readonly string _messageType;
+        private readonly int _queueSize;
+        private readonly JsonSerializerOptions _jsonOptions;
+
+        public string TopicName => _topicName;
+        public string MessageType => _messageType;
+        public bool IsConnected => _room?.ConnectionState == ConnectionState.ConnConnected;
+
+        public LiveKitROS2Publisher(Room room, string topicName, string messageType, int queueSize = 10)
+        {
+            _room = room ?? throw new ArgumentNullException(nameof(room));
+            _topicName = topicName ?? throw new ArgumentNullException(nameof(topicName));
+            _messageType = messageType ?? throw new ArgumentNullException(nameof(messageType));
+            _queueSize = queueSize;
+
+            _jsonOptions = new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                WriteIndented = false
+            };
+        }
+
+        /// <summary>
+        /// 发布ROS2消息
+        /// </summary>
+        public void Publish(T message)
+        {
+            if (!IsConnected)
+            {
+                throw new InvalidOperationException("LiveKit room is not connected");
+            }
+
+            try
+            {
+                // 构造ROS2消息包
+                var ros2Packet = new ROS2DataPacket
+                {
+                    PacketType = "ros2_message",
+                    TopicName = _topicName,
+                    MessageType = _messageType,
+                    Data = message.ToDict(),
+                    Timestamp = message.Timestamp,
+                    SequenceId = GenerateSequenceId()
+                };
+
+                // 序列化为JSON
+                var jsonData = JsonSerializer.Serialize(ros2Packet, _jsonOptions);
+                var dataBytes = System.Text.Encoding.Default.GetBytes(jsonData);
+
+                // 通过LiveKit发送 (同步方法)
+                _room.LocalParticipant.PublishData(dataBytes, reliable: true);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Failed to publish message to topic '{_topicName}': {ex.Message}", ex);
+            }
+        }
+
+        private static long _sequenceCounter = 0;
+        private long GenerateSequenceId()
+        {
+            return System.Threading.Interlocked.Increment(ref _sequenceCounter);
+        }
+    }
+
+    /// <summary>
+    /// ROS2数据包格式
+    /// </summary>
+    public class ROS2DataPacket
+    {
+        public string PacketType { get; set; } = "ros2_message";
+        public string TopicName { get; set; } = "";
+        public string MessageType { get; set; } = "";
+        public Dictionary<string, object> Data { get; set; } = new Dictionary<string, object>();
+        public double Timestamp { get; set; }
+        public long SequenceId { get; set; }
+    }
+
+    /// <summary>
+    /// LiveKit ROS2 桥接管理器
+    /// </summary>
+    public class LiveKitROS2BridgeManager
+    {
+        private readonly Room _room;
+        private readonly Dictionary<string, object> _publishers;
+        private readonly JsonSerializerOptions _jsonOptions;
+
+        public Room Room => _room;
+        public bool IsConnected => _room?.ConnectionState == ConnectionState.ConnConnected;
+
+        public LiveKitROS2BridgeManager(Room room)
+        {
+            _room = room ?? throw new ArgumentNullException(nameof(room));
+            _publishers = new Dictionary<string, object>();
+
+            _jsonOptions = new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                WriteIndented = false
+            };
+
+            // 注册数据接收事件（用于接收Python端的反馈）
+            _room.DataReceived += OnDataReceived;
+        }
+
+        /// <summary>
+        /// 创建ROS2发布者
+        /// </summary>
+        public LiveKitROS2Publisher<T> CreatePublisher<T>(string topicName, int queueSize = 10) where T : ROS2Message, new()
+        {
+            var sampleMessage = new T();
+            var messageType = sampleMessage.MessageType;
+
+            var publisher = new LiveKitROS2Publisher<T>(_room, topicName, messageType, queueSize);
+            var key = $"{topicName}:{messageType}";
+            _publishers[key] = publisher;
+
+            return publisher;
+        }
+
+        /// <summary>
+        /// 创建自定义消息发布者
+        /// </summary>
+        public LiveKitROS2Publisher<CustomMessage> CreateCustomPublisher(string topicName, string messageType, int queueSize = 10)
+        {
+            var publisher = new LiveKitROS2Publisher<CustomMessage>(_room, topicName, messageType, queueSize);
+            var key = $"{topicName}:{messageType}";
+            _publishers[key] = publisher;
+
+            return publisher;
+        }
+
+        /// <summary>
+        /// 发送ROS2服务调用
+        /// </summary>
+        public void CallService(string serviceName, string serviceType, Dictionary<string, object> request)
+        {
+            var servicePacket = new ROS2ServicePacket
+            {
+                PacketType = "ros2_service_call",
+                ServiceName = serviceName,
+                ServiceType = serviceType,
+                Request = request,
+                RequestId = Guid.NewGuid().ToString(),
+                Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0
+            };
+
+            var jsonData = JsonSerializer.Serialize(servicePacket, _jsonOptions);
+            var dataBytes = System.Text.Encoding.UTF8.GetBytes(jsonData);
+
+            _room.LocalParticipant.PublishData(dataBytes, reliable: true);
+        }
+
+        private void OnDataReceived(byte[] data, Participant participant, DataPacketKind kind, string topic)
+        {
+            try
+            {
+                var jsonString = System.Text.Encoding.UTF8.GetString(data);
+                var packet = JsonSerializer.Deserialize<Dictionary<string, object>>(jsonString, _jsonOptions);
+
+                if (packet?.ContainsKey("packet_type") == true)
+                {
+                    var packetType = packet["packet_type"].ToString();
+
+                    if (packetType == "ros2_service_response")
+                    {
+                        // 处理服务响应
+                        HandleServiceResponse(packet);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"处理接收数据时出错: {ex.Message}");
+            }
+        }
+
+        private void HandleServiceResponse(Dictionary<string, object> packet)
+        {
+            // 实现服务响应处理逻辑
+            Console.WriteLine("收到服务响应");
+        }
+
+        public void Dispose()
+        {
+            if (_room != null)
+            {
+                _room.DataReceived -= OnDataReceived;
+            }
+        }
+    }
+
+    /// <summary>
+    /// ROS2服务包格式
+    /// </summary>
+    public class ROS2ServicePacket
+    {
+        public string PacketType { get; set; } = "ros2_service_call";
+        public string ServiceName { get; set; } = "";
+        public string ServiceType { get; set; } = "";
+        public Dictionary<string, object> Request { get; set; } = new Dictionary<string, object>();
+        public string RequestId { get; set; } = "";
+        public double Timestamp { get; set; }
+    }
+}

@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using TMPro;
 //using Unity.AppUI.UI;
 using System.Text.Json;
+using LiveKitROS2Bridge;
 public class Livekit : MonoBehaviour
 {
     public string url = "wss://zwindz1-lam2j1uj.livekit.cloud";
@@ -30,8 +31,10 @@ public class Livekit : MonoBehaviour
     private Vector3 initialRightControllerPosition;
     private Quaternion initialRightControllerRotation;
 
-    private bool first_enter = false;
-    
+    private LiveKitROS2BridgeManager bridgeManager = null;
+    private LiveKitROS2Publisher<TwistMessage> cmdVelPublisher = null;
+    private LiveKitROS2Publisher<PoseStampedMessage> eePosePublisher = null;
+
     // Frame rate control for teleop mode
     private float lastPublishTime = 0f;
     private const float TARGET_FPS = 30f;
@@ -73,7 +76,6 @@ public class Livekit : MonoBehaviour
                 {
                     (initialRightControllerPosition, initialRightControllerRotation) = getControllerPose();
                     Debug.Log("Entering Teleop Mode: initialRightControllerRotation=" + initialRightControllerRotation);
-                    first_enter = true;
                     lastPublishTime = Time.time; // Reset the timer when entering teleop mode
                     UpdateInfoText("In Teleop Mode");
                 }
@@ -83,7 +85,7 @@ public class Livekit : MonoBehaviour
                 // Frame rate control: only publish if enough time has passed
                 if (Time.time - lastPublishTime >= PUBLISH_INTERVAL)
                 {
-                    //publishVelocityData();
+                    publishVelocityData();
                     publishEEPoseData();
                     lastPublishTime = Time.time;
                 }
@@ -142,6 +144,9 @@ public class Livekit : MonoBehaviour
             if (!connect.IsError)
             {
                 Debug.Log("Connected to " + room.Name);
+                bridgeManager = new LiveKitROS2BridgeManager(room);
+                cmdVelPublisher = bridgeManager.CreatePublisher<TwistMessage>("cmd_vel");
+                eePosePublisher = bridgeManager.CreatePublisher<PoseStampedMessage>("ee_pose");
                 UpdateConnectStatus("Connected");
                 UpdateButtonStatusText("Disonnect Robot");
                 UpdateInfoText("Press B to start Teleop");
@@ -214,26 +219,13 @@ public class Livekit : MonoBehaviour
     {
         float az = OVRInput.Get(OVRInput.RawAxis2D.RThumbstick).x;
         float vx = OVRInput.Get(OVRInput.RawAxis2D.RThumbstick).y;
-        // add to json
-        var velocityData = new
+
+        var twistMsg = new TwistMessage
         {
-            linear = new
-            {
-                x = vx,
-                y = 0.0f,
-                z = 0.0f
-            },
-            angular = new
-            {
-                x = 0.0f,
-                y = 0.0f,
-                z = az
-            },
-            timestamp = System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+            Linear = new Vector3(vx, 0.0f, 0.0f),
+            Angular = new Vector3(0.0f, 0.0f, az)
         };
-        string str = JsonSerializer.Serialize(velocityData);
-        //Debug.Log("publishVelocityData: vx=" + vx + ", az=" + az);
-        room.LocalParticipant.PublishData(System.Text.Encoding.Default.GetBytes(str), reliable: false, topic: "velocity");
+        cmdVelPublisher.Publish(twistMsg);
     }
 
     public void publishEEPoseData()
@@ -245,25 +237,17 @@ public class Livekit : MonoBehaviour
         // convert to ROS2 pose
         (Vector3 offsetPositionRos, Quaternion offsetRotationRos) = UnityPose2RosPose(offsetPosition, offsetRotation);
 
-        float gripper_value = getTriggerValue();
-
-        var eePoseData = new {
-            p = new float[] { offsetPositionRos.x, offsetPositionRos.y, offsetPositionRos.z },
-            q = new float[] { offsetRotationRos.x, offsetRotationRos.y, offsetRotationRos.z, offsetRotationRos.w },
-            gripper = gripper_value,
-            first_enter = first_enter ? 1 : 0,
-            timestamp = System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
-        };
-        string str = JsonSerializer.Serialize(eePoseData);
-        // debug: convert qtion to rpy to check if it is correct
-        //Debug.Log($"publishEEPoseData: position={offsetPositionRos}, rotation={offsetRotationRos.eulerAngles}, first_enter={first_enter}");
-        room.LocalParticipant.PublishData(System.Text.Encoding.Default.GetBytes(str), reliable: false, topic: "ee_pose");
-        
-        // Reset first_enter flag after first publish
-        if (first_enter)
+        var poseMsg = new PoseStampedMessage
         {
-            first_enter = false;
-        }
+            Header = new HeaderMessage { FrameId = "ee" },
+            Pose = new PoseMessage
+            {
+                Position = offsetPositionRos,
+                Orientation = offsetRotation
+            }
+        };
+
+        eePosePublisher.Publish(poseMsg);
     }
 
     private (Vector3, Quaternion) getControllerPose()
