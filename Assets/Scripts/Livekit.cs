@@ -34,7 +34,7 @@ public class Livekit : MonoBehaviour
     private LiveKitROS2BridgeManager bridgeManager = null;
     private LiveKitROS2Publisher<TwistMessage> cmdVelPublisher = null;
     private LiveKitROS2Publisher<PoseStampedMessage> eePosePublisher = null;
-    private LiveKitROS2Publisher<Float64Message> gripperPublisher = null;
+    private LiveKitROS2Publisher<JointStateMessage> gripperPublisher = null;
 
     // Frame rate control for teleop mode
     private float lastPublishTime = 0f;
@@ -149,7 +149,7 @@ public class Livekit : MonoBehaviour
                 bridgeManager = new LiveKitROS2BridgeManager(room);
                 cmdVelPublisher = bridgeManager.CreatePublisher<TwistMessage>("cmd_vel");
                 eePosePublisher = bridgeManager.CreatePublisher<PoseStampedMessage>("ee_pose");
-                gripperPublisher = bridgeManager.CreatePublisher<Float64Message>("gripper");
+                gripperPublisher = bridgeManager.CreatePublisher<JointStateMessage>("main_gripper/gripper_command");
                 UpdateConnectStatus("Connected");
                 UpdateButtonStatusText("Disonnect Robot");
                 UpdateInfoText("Press B to start Teleop");
@@ -263,9 +263,12 @@ public class Livekit : MonoBehaviour
     private void PublishTriggerValue()
     {
         float triggerValue = OVRInput.Get(OVRInput.RawAxis1D.RIndexTrigger);
-        var gripperMsg = new Float64Message
+        var gripperMsg = new JointStateMessage
         {
-            Data = triggerValue
+            Name = new List<string> { "main_gripper" },
+            Position = new List<double> { triggerValue },
+            Velocity = new List<double> { 0.0 },
+            Effort = new List<double> { 0.0 }
         };
         gripperPublisher.Publish(gripperMsg);
     }

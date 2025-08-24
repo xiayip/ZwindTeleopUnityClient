@@ -194,6 +194,28 @@ namespace LiveKitROS2Bridge
         }
     }
 
+    public class JointStateMessage : ROS2Message
+    {
+        public List<string> Name { get; set; } = new List<string>();
+        public List<double> Position { get; set; } = new List<double>();
+        public List<double> Velocity { get; set; } = new List<double>();
+        public List<double> Effort { get; set; } = new List<double>();
+        public JointStateMessage()
+        {
+            MessageType = "sensor_msgs/msg/JointState";
+        }
+        public override Dictionary<string, object> ToDict()
+        {
+            return new Dictionary<string, object>
+            {
+                ["name"] = Name,
+                ["position"] = Position,
+                ["velocity"] = Velocity,
+                ["effort"] = Effort
+            };
+        }
+    }
+
     /// <summary>
     /// LiveKit ROS2 发布者
     /// 提供类似ROS2 Publisher的接口，实际通过LiveKit Data Packets发送
