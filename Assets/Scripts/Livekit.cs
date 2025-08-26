@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using UnityEngine;
 using LiveKit;
@@ -70,17 +71,20 @@ public class Livekit : MonoBehaviour
     {
         if (room != null)
         {
-            if (OVRInput.GetUp(OVRInput.RawButton.B))
-            {
-                inTeleopMode = !inTeleopMode;
-                if (inTeleopMode)
-                {
-                    (initialRightControllerPosition, initialRightControllerRotation) = getControllerPose();
-                    Debug.Log("Entering Teleop Mode: initialRightControllerRotation=" + initialRightControllerRotation);
-                    lastPublishTime = Time.time; // Reset the timer when entering teleop mode
-                    UpdateInfoText("In Teleop Mode");
-                }
+            if (OVRInput.GetUp(OVRInput.RawButton.B) && !inTeleopMode)
+            {                 
+                CallTeleopStart();
+                (initialRightControllerPosition, initialRightControllerRotation) = getControllerPose();
+                Debug.Log("Entering Teleop Mode: initialRightControllerRotation=" + initialRightControllerRotation);
+                lastPublishTime = Time.time; // Reset the timer when entering teleop mode
+                UpdateInfoText("In Teleop Mode");
             }
+            else if (OVRInput.GetUp(OVRInput.RawButton.B) && inTeleopMode)
+            {
+                //CallTeleopStop();
+                inTeleopMode = false;
+            }
+
             if (inTeleopMode)
             {
                 // Frame rate control: only publish if enough time has passed
@@ -214,6 +218,35 @@ public class Livekit : MonoBehaviour
         Debug.Log("DataReceived: from " + participant.Identity + ", data " + str);
     }
 
+    private bool GetBoolValue(object value)
+    {
+        return value switch
+        {
+            JsonElement jsonElement => jsonElement.GetBoolean(),
+            bool boolValue => boolValue,
+            _ => Convert.ToBoolean(value.ToString())
+        };
+    }
+
+    void CallTeleopStart()
+    {
+        bridgeManager.CallService("start_teleop", "std_srvs/srv/Trigger", new Dictionary<string, object>(), response =>
+        {
+            try
+            {
+                if (response?.ContainsKey("success") == true)
+                {
+                    inTeleopMode = GetBoolValue(response["success"]);
+                    Debug.Log($"Teleop mode set to: {inTeleopMode}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"处理服务响应时出错: {ex.Message}");
+            }
+        });
+    }
+
     public void PublishVelocityData()
     {
         float az = OVRInput.Get(OVRInput.RawAxis2D.RThumbstick).x;
@@ -242,7 +275,7 @@ public class Livekit : MonoBehaviour
             Pose = new PoseMessage
             {
                 Position = offsetPositionRos,
-                Orientation = offsetRotation
+                Orientation = offsetRotationRos  // Fixed: was using offsetRotation instead of offsetRotationRos
             }
         };
 

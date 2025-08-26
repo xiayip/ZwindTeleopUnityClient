@@ -311,6 +311,7 @@ namespace LiveKitROS2Bridge
         private readonly Dictionary<string, object> _publishers;
         private readonly JsonSerializerOptions _jsonOptions;
 
+        private readonly Dictionary<string, Action<Dictionary<string, object>>> _serviceResponseCallbacks;
         public Room Room => _room;
         public bool IsConnected => _room?.ConnectionState == ConnectionState.ConnConnected;
 
@@ -318,6 +319,7 @@ namespace LiveKitROS2Bridge
         {
             _room = room ?? throw new ArgumentNullException(nameof(room));
             _publishers = new Dictionary<string, object>();
+            _serviceResponseCallbacks = new Dictionary<string, Action<Dictionary<string, object>>>();
 
             _jsonOptions = new JsonSerializerOptions
             {
@@ -359,21 +361,26 @@ namespace LiveKitROS2Bridge
         /// <summary>
         /// 发送ROS2服务调用
         /// </summary>
-        public void CallService(string serviceName, string serviceType, Dictionary<string, object> request)
+        public void CallService(string serviceName, string serviceType, Dictionary<string, object> request, Action<Dictionary<string, object>> responseCallback = null)
         {
+            var requestId = Guid.NewGuid().ToString();
             var servicePacket = new ROS2ServicePacket
             {
                 PacketType = "ros2_service_call",
                 ServiceName = serviceName,
                 ServiceType = serviceType,
                 Request = request,
-                RequestId = Guid.NewGuid().ToString(),
+                RequestId = requestId,
                 Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0
             };
 
+            if (responseCallback != null)
+            {
+                _serviceResponseCallbacks[requestId] = responseCallback;
+            }
+
             var jsonData = JsonSerializer.Serialize(servicePacket, _jsonOptions);
             var dataBytes = System.Text.Encoding.UTF8.GetBytes(jsonData);
-
             _room.LocalParticipant.PublishData(dataBytes, reliable: true);
         }
 
@@ -384,9 +391,9 @@ namespace LiveKitROS2Bridge
                 var jsonString = System.Text.Encoding.UTF8.GetString(data);
                 var packet = JsonSerializer.Deserialize<Dictionary<string, object>>(jsonString, _jsonOptions);
 
-                if (packet?.ContainsKey("packet_type") == true)
+                if (packet?.ContainsKey("packetType") == true)
                 {
-                    var packetType = packet["packet_type"].ToString();
+                    var packetType = packet["packetType"].ToString();
 
                     if (packetType == "ros2_service_response")
                     {
@@ -403,8 +410,24 @@ namespace LiveKitROS2Bridge
 
         private void HandleServiceResponse(Dictionary<string, object> packet)
         {
-            // 实现服务响应处理逻辑
-            Console.WriteLine("收到服务响应");
+            Console.WriteLine("Get service response.");
+            try
+            {
+                if (packet.ContainsKey("requestId"))
+                {
+                    string requestId = packet["requestId"].ToString();
+
+                    if (_serviceResponseCallbacks.TryGetValue(requestId, out var callback))
+                    {
+                        callback?.Invoke(packet);
+                        _serviceResponseCallbacks.Remove(requestId);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                UnityEngine.Debug.LogError($"处理服务响应时出错: {ex.Message}");
+            }
         }
 
         public void Dispose()
@@ -413,6 +436,7 @@ namespace LiveKitROS2Bridge
             {
                 _room.DataReceived -= OnDataReceived;
             }
+            _serviceResponseCallbacks?.Clear();
         }
     }
 
