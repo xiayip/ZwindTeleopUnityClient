@@ -92,9 +92,6 @@ public class Livekit : MonoBehaviour
                     lastPublishTime = Time.time;
                 }
             }
-            else
-            {
-            }
         }
     }
 
@@ -148,7 +145,7 @@ public class Livekit : MonoBehaviour
                 Debug.Log("Connected to " + room.Name);
                 bridgeManager = new LiveKitROS2BridgeManager(room);
                 cmdVelPublisher = bridgeManager.CreatePublisher<TwistMessage>("cmd_vel");
-                eePosePublisher = bridgeManager.CreatePublisher<PoseStampedMessage>("ee_pose");
+                eePosePublisher = bridgeManager.CreatePublisher<PoseStampedMessage>("ee_offset_pose");
                 gripperPublisher = bridgeManager.CreatePublisher<JointStateMessage>("main_gripper/gripper_command");
                 UpdateConnectStatus("Connected");
                 UpdateButtonStatusText("Disonnect Robot");
@@ -158,24 +155,23 @@ public class Livekit : MonoBehaviour
     }
     void Disconnect()
     {
+        // disconnect room
         room.Disconnect();
-        CleanUp();
         room = null;
-        UpdateConnectStatus("Disconnected");
-        UpdateButtonStatusText("Connect Robot");
-        UpdateInfoText("Please Connect Robot First");
-    }
-
-    void CleanUp()
-    {
+        // set image panel to black
         RawImage image = VideoStreamObject.GetComponent<RawImage>();
         if (image != null)
         {
             image.color = Color.clear;
             image.texture = null;
         }
+        // set inTeleopMode
+        inTeleopMode = false;
+        // update status text
+        UpdateConnectStatus("Disconnected");
+        UpdateButtonStatusText("Connect Robot");
+        UpdateInfoText("Please Connect Robot First");
     }
-
 
     void AddVideoTrack(RemoteVideoTrack videoTrack)
     {
@@ -242,7 +238,7 @@ public class Livekit : MonoBehaviour
 
         var poseMsg = new PoseStampedMessage
         {
-            Header = new HeaderMessage { FrameId = "ee" },
+            Header = new HeaderMessage { FrameId = "ee_offset" },
             Pose = new PoseMessage
             {
                 Position = offsetPositionRos,
