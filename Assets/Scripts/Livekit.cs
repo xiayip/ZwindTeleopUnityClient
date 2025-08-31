@@ -132,6 +132,32 @@ public class Livekit : MonoBehaviour
         Debug.Log("Connect to room");
         StartCoroutine(Connect());
     }
+    public void onClicGoToPickPose()
+    {
+        bridgeManager.CallService("goto_pick_pose", "std_srvs/srv/Trigger", new Dictionary<string, object>(), response =>
+        {
+            if (response?.ContainsKey("success") == true)
+            {
+                Debug.Log("goto_pick_pose success}");
+            } else {
+                Debug.Log("goto_pick_pose failed}");
+            }
+        });
+    }
+    public void onClicGoToTapPose()
+    {
+        bridgeManager.CallService("goto_tap_pose", "std_srvs/srv/Trigger", new Dictionary<string, object>(), response =>
+        {
+            if (response?.ContainsKey("success") == true)
+            {
+                Debug.Log("goto_pick_pose success}");
+            }
+            else
+            {
+                Debug.Log("goto_pick_pose failed}");
+            }
+        });
+    }
 
     IEnumerator Connect()
     {
@@ -147,13 +173,24 @@ public class Livekit : MonoBehaviour
             if (!connect.IsError)
             {
                 Debug.Log("Connected to " + room.Name);
-                bridgeManager = new LiveKitROS2BridgeManager(room);
-                cmdVelPublisher = bridgeManager.CreatePublisher<TwistMessage>("cmd_vel");
-                eePosePublisher = bridgeManager.CreatePublisher<PoseStampedMessage>("ee_offset_pose");
-                gripperPublisher = bridgeManager.CreatePublisher<JointStateMessage>("main_gripper/gripper_command");
-                UpdateConnectStatus("Connected");
-                UpdateButtonStatusText("Disonnect Robot");
-                UpdateInfoText("Press B to start Teleop");
+                if (room.RemoteParticipants.Count > 0)
+                {
+                    bridgeManager = new LiveKitROS2BridgeManager(room);
+                    cmdVelPublisher = bridgeManager.CreatePublisher<TwistMessage>("cmd_vel");
+                    eePosePublisher = bridgeManager.CreatePublisher<PoseStampedMessage>("ee_offset_pose");
+                    gripperPublisher = bridgeManager.CreatePublisher<JointStateMessage>("main_gripper/gripper_command");
+                    UpdateConnectStatus("Connected");
+                    UpdateButtonStatusText("Disonnect Robot");
+                    UpdateInfoText("Press B to start Teleop");
+                }
+                else
+                {
+                    Debug.Log("No remote participants in the room.");
+                    UpdateConnectStatus("Robot not online");
+                    UpdateButtonStatusText("Connect Robot");
+                    UpdateInfoText("The robot is not online");
+                }
+
             }
         }
     }
