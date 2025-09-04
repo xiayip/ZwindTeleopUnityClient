@@ -43,8 +43,11 @@ public class Livekit : MonoBehaviour
     #region ¹«¹²×Ö¶Î
 
     [Header("Connection Settings")]
-    public string url = "wss://zwindz1-lam2j1uj.livekit.cloud";
-    public string token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NjA3MzI5ODYsImlzcyI6IkFQSXduZkVoTmNUY2ZzQSIsIm5iZiI6MTc1MTczMjk4Niwic3ViIjoiVlIiLCJ2aWRlbyI6eyJjYW5QdWJsaXNoIjp0cnVlLCJjYW5QdWJsaXNoRGF0YSI6dHJ1ZSwiY2FuU3Vic2NyaWJlIjp0cnVlLCJyb29tIjoibXktcm9vbSIsInJvb21Kb2luIjp0cnVlfH0.oGMrOIDNqyilOWw-6FgqpSKBzyIEp7pZG_FkFtPXji8";
+    //public string url = "wss://zwindz1-lam2j1uj.livekit.cloud";
+    //public string token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NjA3MzI5ODYsImlzcyI6IkFQSXduZkVoTmNUY2ZzQSIsIm5iZiI6MTc1MTczMjk4Niwic3ViIjoiVlIiLCJ2aWRlbyI6eyJjYW5QdWJsaXNoIjp0cnVlLCJjYW5QdWJsaXNoRGF0YSI6dHJ1ZSwiY2FuU3Vic2NyaWJlIjp0cnVlLCJyb29tIjoibXktcm9vbSIsInJvb21Kb2luIjp0cnVlfH0.oGMrOIDNqyilOWw-6FgqpSKBzyIEp7pZG_FkFtPXji8";
+
+    public string url = "ws://47.111.148.68:7880";
+    public string token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE4MjY5NjU3ODIsImlzcyI6InVuaXgiLCJuYW1lIjoidW5pdHkiLCJuYmYiOjE3NTQ5NjU3ODIsInN1YiI6InVuaXR5IiwidmlkZW8iOnsicm9vbSI6ImRpbmdkYW5nIiwicm9vbUpvaW4iOnRydWV9fQ.CADs5YcN1w5b7JJ8_WA_ruP_7NWIcKVZPkZ8SuwZChM";
 
     [Header("UI References")]
     public GameObject VideoStreamObject;
@@ -459,7 +462,7 @@ public class Livekit : MonoBehaviour
     {
         if (cmdVelPublisher == null) return;
 
-        float az = OVRInput.Get(OVRInput.RawAxis2D.RThumbstick).x;
+        float az = -OVRInput.Get(OVRInput.RawAxis2D.RThumbstick).x;
         float vx = OVRInput.Get(OVRInput.RawAxis2D.RThumbstick).y;
 
         var twistMsg = new TwistMessage
