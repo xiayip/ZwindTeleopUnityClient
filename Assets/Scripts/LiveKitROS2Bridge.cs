@@ -9,19 +9,6 @@ using static LiveKit.Proto.DataStream.Types;
 namespace LiveKitROS2Bridge
 {
     /// <summary>
-    /// ROS2消息类型枚举
-    /// </summary>
-    public enum ROS2MessageType
-    {
-        GeometryTwist,
-        StdString,
-        SensorImage,
-        GeometryPoseStamped,
-        NavOdometry,
-        Custom
-    }
-
-    /// <summary>
     /// ROS2消息基类
     /// </summary>
     public abstract class ROS2Message
@@ -61,6 +48,24 @@ namespace LiveKitROS2Bridge
                     ["y"] = Angular.y,
                     ["z"] = Angular.z
                 }
+            };
+        }
+    }
+
+    public class TwistStampedMessage : ROS2Message
+    {
+        public HeaderMessage Header { get; set; } = new HeaderMessage();
+        public TwistMessage Twist { get; set; } = new TwistMessage();
+        public TwistStampedMessage()
+        {
+            MessageType = "geometry_msgs/msg/TwistStamped";
+        }
+        public override Dictionary<string, object> ToDict()
+        {
+            return new Dictionary<string, object>
+            {
+                ["header"] = Header.ToDict(),
+                ["twist"] = Twist.ToDict()
             };
         }
     }
