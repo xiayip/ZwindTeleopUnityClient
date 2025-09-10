@@ -80,6 +80,7 @@ public class Livekit : MonoBehaviour
     private LiveKitROS2BridgeManager bridgeManager = null;
     private LiveKitROS2Publisher<TwistMessage> cmdVelPublisher = null;
     private LiveKitROS2Publisher<PoseStampedMessage> eePosePublisher = null;
+    private LiveKitROS2Publisher<TwistStampedMessage> eeTwistPublisher = null;
     private LiveKitROS2Publisher<JointStateMessage> gripperPublisher = null;
 
     // 帧率控制
@@ -259,6 +260,7 @@ public class Livekit : MonoBehaviour
         {
             PublishVelocityData();
             PublishEEPoseData();
+            //PublishEETwistData();
             PublishTriggerValue();
             lastPublishTime = Time.time;
         }
@@ -305,6 +307,7 @@ public class Livekit : MonoBehaviour
                 bridgeManager = new LiveKitROS2BridgeManager(room);
                 cmdVelPublisher = bridgeManager.CreatePublisher<TwistMessage>("cmd_vel");
                 eePosePublisher = bridgeManager.CreatePublisher<PoseStampedMessage>("ee_offset_pose");
+                eeTwistPublisher = bridgeManager.CreatePublisher<TwistStampedMessage>("servo_node/delta_twist_cmds");
                 gripperPublisher = bridgeManager.CreatePublisher<JointStateMessage>("main_gripper/gripper_command");
 
                 CheckRobotOnlineStatus();
@@ -510,9 +513,51 @@ public class Livekit : MonoBehaviour
         gripperPublisher.Publish(gripperMsg);
     }
 
+    /// <summary>
+    /// 发布末端执行器的速度数据
+    /// </summary>
+    public void PublishEETwistData()
+    {
+        if (eeTwistPublisher == null) return;
+
+        // 直接获取控制器的线性和角速度
+        (Vector3 linearVelocity, Vector3 angularVelocity) = getControllerVelocity();
+
+        // 转换到ROS坐标系
+        (Vector3 linearVelocityRos, Vector3 angularVelocityRos) = ConvertVelocityToROS(linearVelocity, angularVelocity);
+
+        // 创建TwistStamped消息
+        var twistStampedMsg = new TwistStampedMessage
+        {
+            Header = new HeaderMessage { FrameId = "link_grasp_center" },
+            Twist = new TwistMessage
+            {
+                Linear = linearVelocityRos,
+                Angular = angularVelocityRos
+            }
+        };
+
+        // 发布消息
+        eeTwistPublisher.Publish(twistStampedMsg);
+    }
+
     #endregion
 
     #region 辅助方法
+
+    /// <summary>
+    /// 将Unity坐标系的速度转换为ROS坐标系
+    /// </summary>
+    private (Vector3, Vector3) ConvertVelocityToROS(Vector3 unityLinearVel, Vector3 unityAngularVel)
+    {
+        // 使用与位置转换相同的坐标转换逻辑
+        // Unity: +X=right, +Y=up, +Z=forward
+        // ROS: +X=forward, +Y=left, +Z=up
+        Vector3 rosLinearVel = new Vector3(-unityLinearVel.y, -unityLinearVel.x, unityLinearVel.z);
+        Vector3 rosAngularVel = new Vector3(-unityAngularVel.y, -unityAngularVel.x, unityAngularVel.z);
+        
+        return (rosLinearVel, rosAngularVel);
+    }
 
     private void ValidateUIReferences()
     {
@@ -565,6 +610,13 @@ public class Livekit : MonoBehaviour
         Vector3 position = OVRInput.GetLocalControllerPosition(OVRInput.Controller.RTouch);
         Quaternion rotation = OVRInput.GetLocalControllerRotation(OVRInput.Controller.RTouch);
         return (position, rotation);
+    }
+
+    private (Vector3, Vector3) getControllerVelocity()
+    {
+        Vector3 linear_vel = OVRInput.GetLocalControllerVelocity(OVRInput.Controller.RTouch);
+        Vector3 angular_vel = OVRInput.GetLocalControllerAngularVelocity(OVRInput.Controller.RTouch);
+        return (linear_vel, angular_vel);
     }
 
     private (Vector3, Quaternion) UnityPose2RosPose(Vector3 unityPos, Quaternion unityRot)
