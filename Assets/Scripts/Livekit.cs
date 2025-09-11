@@ -9,6 +9,7 @@ using System.Collections.Generic;
 using TMPro;
 using System.Text.Json;
 using LiveKitROS2Bridge;
+using Draco;
 
 public class Livekit : MonoBehaviour
 {
