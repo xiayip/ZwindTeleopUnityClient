@@ -1,15 +1,17 @@
-using System;
-using System.Collections;
-using UnityEngine;
+using Draco;
 using LiveKit;
 using LiveKit.Proto;
+using LiveKitROS2Bridge;
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text.Json;
+using TMPro;
+using UnityEngine;
+using UnityEngine.Rendering;
 using UnityEngine.UI;
 using RoomOptions = LiveKit.RoomOptions;
-using System.Collections.Generic;
-using TMPro;
-using System.Text.Json;
-using LiveKitROS2Bridge;
-using Draco;
 
 public class Livekit : MonoBehaviour
 {
@@ -56,6 +58,7 @@ public class Livekit : MonoBehaviour
     public TMP_Text connectStatusText;
     public TMP_Text buttonStatusText;
     public Image connectStatusIcon;
+    public Material pointCloudMaterial;
 
     [Header("Status Icons")]
     public Sprite disConnectSprite;
@@ -76,6 +79,48 @@ public class Livekit : MonoBehaviour
     private bool inTeleopMode = false;
     private Vector3 initialRightControllerPosition;
     private Quaternion initialRightControllerRotation;
+
+    // single frame pointcloud buffer
+    private byte[] pointCloudBuffer = new byte[1024 * 1024]; // 1 MB buffer
+
+    // multi-frame pointcloud assembly
+    private Dictionary<int, PointCloudFrame> pointCloudFrames = new Dictionary<int, PointCloudFrame>();
+
+    /// <summary>
+    /// point cloud frame data structure for multi-frame assembly
+    /// </summary>
+    private class PointCloudFrame
+    {
+        public int Id { get; set; }
+        public int TotalChunks { get; set; }
+        public Dictionary<int, byte[]> Chunks { get; set; } = new Dictionary<int, byte[]>();
+        public int ReceivedChunks => Chunks.Count;
+        public bool IsComplete => ReceivedChunks == TotalChunks;
+
+        public byte[] GetCompleteData()
+        {
+            if (!IsComplete) return null;
+
+            int totalSize = 0;
+            foreach (var chunk in Chunks.Values)
+            {
+                totalSize += chunk.Length;
+            }
+
+            var completeData = new byte[totalSize];
+            int offset = 0;
+
+            for (int i = 0; i < TotalChunks; i++)
+            {
+                if (Chunks.TryGetValue(i, out var chunk))
+                {
+                    Array.Copy(chunk, 0, completeData, offset, chunk.Length);
+                    offset += chunk.Length;
+                }
+            }
+            return completeData;
+        }
+    }
 
     // ROS2ге╫с
     private LiveKitROS2BridgeManager bridgeManager = null;
@@ -385,8 +430,96 @@ public class Livekit : MonoBehaviour
 
     void DataReceived(byte[] data, Participant participant, DataPacketKind kind, string topic)
     {
-        var str = System.Text.Encoding.Default.GetString(data);
-        Debug.Log("DataReceived: from " + participant.Identity + ", data " + str);
+        if (topic == "pointcloud:meta")
+        {
+            try
+            {
+                // parse json like {"id": 236, "chunk": 3, "total": 4}
+                var jsonString = System.Text.Encoding.Default.GetString(data);
+                var meta = JsonSerializer.Deserialize<Dictionary<string, object>>(jsonString);
+
+                if (meta != null && meta.ContainsKey("id") && meta.ContainsKey("chunk") && meta.ContainsKey("total"))
+                {
+                    int id = GetIntValue(meta["id"]);
+                    int chunk = GetIntValue(meta["chunk"]);
+                    int total = GetIntValue(meta["total"]);
+                    //Debug.Log($"PointCloud Meta: id={id}, chunk={chunk}, total={total}");
+
+                    if (!pointCloudFrames.ContainsKey(id))
+                    {
+                        pointCloudFrames[id] = new PointCloudFrame
+                        {
+                            Id = id,
+                            TotalChunks = total,
+                            Chunks = new Dictionary<int, byte[]>()
+                        };
+
+                        while (pointCloudFrames.Count > 3)
+                        {
+                            var oldestKey = pointCloudFrames.Keys.Min();
+                            pointCloudFrames.Remove(oldestKey);
+                        }
+                    }
+                    // check chunk index validity
+                    if (chunk == total - 1 && pointCloudFrames[id].IsComplete)
+                    {
+                        var completeData = pointCloudFrames[id].GetCompleteData();
+                        if (completeData != null && completeData.Length <= pointCloudBuffer.Length)
+                        {
+                            Array.Copy(completeData, 0, pointCloudBuffer, 0, completeData.Length);
+                            //Debug.Log($"Rendering PointCloud id={id} with size={completeData.Length}");
+                            RenderPointCloud(completeData, id);
+                        }
+                        pointCloudFrames.Remove(id);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Error parsing pointcloud meta: {ex.Message}");
+            }
+        }
+        else if (topic == "pointcloud")
+        {
+            if (pointCloudFrames.Count > 0)
+            {
+                var latestFrame = pointCloudFrames.Values.OrderBy(f => f.Id).Last();
+                var nextChunkIndex = latestFrame.ReceivedChunks;
+
+                if (nextChunkIndex < latestFrame.TotalChunks)
+                {
+                    latestFrame.Chunks[nextChunkIndex] = new byte[data.Length];
+                    Array.Copy(data, 0, latestFrame.Chunks[nextChunkIndex], 0, data.Length);
+
+                    //Debug.Log($"Stored chunk {nextChunkIndex}/{latestFrame.TotalChunks} for frame {latestFrame.Id}");
+
+                    // check if frame is complete
+                    if (latestFrame.IsComplete)
+                    {
+                        var completeData = latestFrame.GetCompleteData();
+                        if (completeData != null && completeData.Length <= pointCloudBuffer.Length)
+                        {
+                            Array.Copy(completeData, 0, pointCloudBuffer, 0, completeData.Length);
+                            //Debug.Log($"Rendering PointCloud id={latestFrame.Id} with size={completeData.Length}");
+                            RenderPointCloud(completeData, latestFrame.Id);
+                        }
+                        pointCloudFrames.Remove(latestFrame.Id);
+                    }
+                }
+            }
+            else
+            {
+                if (data.Length <= pointCloudBuffer.Length)
+                {
+                    Array.Copy(data, 0, pointCloudBuffer, 0, data.Length);
+                    //Debug.Log($"Direct pointcloud data received with size {data.Length}");
+                }
+                else
+                {
+                    Debug.LogWarning("Received pointcloud data chunk is too large for buffer");
+                }
+            }
+        }
     }
 
     #endregion
@@ -400,6 +533,18 @@ public class Livekit : MonoBehaviour
             JsonElement jsonElement => jsonElement.GetBoolean(),
             bool boolValue => boolValue,
             _ => Convert.ToBoolean(value.ToString())
+        };
+    }
+
+    private int GetIntValue(object value)
+    {
+        return value switch
+        {
+            JsonElement jsonElement => jsonElement.GetInt32(),
+            int intValue => intValue,
+            long longValue => (int)longValue,
+            double doubleValue => (int)doubleValue,
+            _ => Convert.ToInt32(value.ToString())
         };
     }
 
@@ -627,6 +772,89 @@ public class Livekit : MonoBehaviour
         transform.rotation = offsetRotationRos;
         transform.RotateAround(Vector3.zero, Vector3.up, 0f);
         return (transform.position, transform.rotation);
+    }
+
+    /// <summary>
+    /// render point cloud from byte array data
+    /// </summary>
+    private void RenderPointCloud(byte[] pointCloudData, int frameId)
+    {
+        try
+        {
+            // start a coroutine to decode and render the point cloud
+            StartCoroutine(RenderPointCloudAsync(pointCloudData, frameId));
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"Error rendering point cloud frame {frameId}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// asynchronous point cloud decoding and rendering coroutine
+    /// </summary>
+    private System.Collections.IEnumerator RenderPointCloudAsync(byte[] pointCloudData, int frameId)
+    {
+        var attributeIdMap = new System.Collections.Generic.Dictionary<VertexAttribute, int>
+        {
+            { VertexAttribute.Position, 0 },
+            { VertexAttribute.Color, 1 }
+        };
+        var decodingTask = DracoDecoder.DecodeMesh(pointCloudData, DecodeSettings.Default, attributeIdMap);
+        //var decodingTask = DracoDecoder.DecodeMesh(pointCloudData);
+
+        // wait for the decoding to complete
+        while (!decodingTask.IsCompleted)
+        {
+            yield return null;
+        }
+
+        var mesh = decodingTask.Result;
+        if (mesh != null)
+        {
+            //// Keep CPU copy to allow safe inspections (e.g., colors) if needed
+            //mesh.UploadMeshData(false);
+            UpdatePointCloudDisplay(mesh, frameId);
+        }
+        else
+        {
+            Debug.LogWarning($"Failed to decode point cloud frame {frameId}: mesh is null");
+        }
+    }
+
+    /// <summary>
+    /// Update or create the point cloud display object with the given mesh
+    /// </summary>
+    private void UpdatePointCloudDisplay(Mesh mesh, int frameId)
+    {
+        GameObject pointCloudObject = GameObject.Find("PointCloudDisplay");
+
+        if (pointCloudObject == null)
+        {
+            pointCloudObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            Destroy(pointCloudObject.GetComponent<Collider>());
+            pointCloudObject.name = "PointCloudDisplay";
+            Material m = Instantiate(pointCloudMaterial);
+            m.SetFloat("_PointSize", 1.0f);
+            MeshRenderer render = pointCloudObject.GetComponent<MeshRenderer>();
+            if (m.HasProperty("_Tint")) m.SetColor("_Tint", Color.white);
+            render.material = m;
+            // optional : disable shadow casting and receiving for performance
+            render.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            render.receiveShadows = false;
+        }
+
+        // assign the mesh to the MeshFilter
+        bool hasColors = (mesh.colors32 != null && mesh.colors32.Length == mesh.vertexCount) ||
+                         (mesh.colors != null && mesh.colors.Length == mesh.vertexCount);
+        if (!hasColors)
+        {
+            Debug.LogWarning($"Decoded mesh has no vertex colors (frame {frameId}). Using material tint color.");
+        }
+        var meshFilter = pointCloudObject.GetComponent<MeshFilter>();
+        meshFilter.mesh = mesh;
+
+        //Debug.Log($"Point cloud frame {frameId} applied to display object (hasColors={hasColors})");
     }
 
     #endregion
