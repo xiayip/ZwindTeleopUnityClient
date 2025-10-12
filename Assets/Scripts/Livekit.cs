@@ -795,13 +795,7 @@ public class Livekit : MonoBehaviour
     /// </summary>
     private System.Collections.IEnumerator RenderPointCloudAsync(byte[] pointCloudData, int frameId)
     {
-        var attributeIdMap = new System.Collections.Generic.Dictionary<VertexAttribute, int>
-        {
-            { VertexAttribute.Position, 0 },
-            { VertexAttribute.Color, 1 }
-        };
-        var decodingTask = DracoDecoder.DecodeMesh(pointCloudData, DecodeSettings.Default, attributeIdMap);
-        //var decodingTask = DracoDecoder.DecodeMesh(pointCloudData);
+        var decodingTask = DracoDecoder.DecodeMesh(pointCloudData);
 
         // wait for the decoding to complete
         while (!decodingTask.IsCompleted)
@@ -835,7 +829,7 @@ public class Livekit : MonoBehaviour
             Destroy(pointCloudObject.GetComponent<Collider>());
             pointCloudObject.name = "PointCloudDisplay";
             Material m = Instantiate(pointCloudMaterial);
-            m.SetFloat("_PointSize", 1.0f);
+            //m.SetFloat("_PointSize", 1.0f);
             MeshRenderer render = pointCloudObject.GetComponent<MeshRenderer>();
             if (m.HasProperty("_Tint")) m.SetColor("_Tint", Color.white);
             render.material = m;
