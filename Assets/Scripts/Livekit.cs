@@ -71,6 +71,8 @@ public class Livekit : MonoBehaviour
     public int pointCloudBufferSize = 30;
     [Tooltip("Color tint applied to point cloud")]
     public Color pointTint = Color.white;
+    [Tooltip("VR Camera transform (leave empty to auto-detect CenterEyeAnchor)")]
+    public Transform vrCameraTransform = null;
 
     #endregion
 
@@ -96,6 +98,11 @@ public class Livekit : MonoBehaviour
     private Queue<Mesh> pointCloudRingBuffer = new Queue<Mesh>();
     private Mesh accumulatedPointCloudMesh = null;
     private bool needsRebuild = false;
+
+    // Camera pose at robot connection time for point cloud reference frame
+    private Vector3 initialCameraPosition;
+    private Quaternion initialCameraRotation;
+    private bool cameraPoseRecorded = false;
 
     /// <summary>
     /// point cloud frame data structure for multi-frame assembly
@@ -369,6 +376,9 @@ public class Livekit : MonoBehaviour
             {
                 Debug.Log("Connected to " + room.Name);
 
+                // Record initial camera pose for point cloud reference frame
+                RecordInitialCameraPose();
+
                 bridgeManager = new LiveKitROS2BridgeManager(room);
                 cmdVelPublisher = bridgeManager.CreatePublisher<TwistMessage>("cmd_vel");
                 eePosePublisher = bridgeManager.CreatePublisher<PoseStampedMessage>("ee_offset_pose");
@@ -376,6 +386,7 @@ public class Livekit : MonoBehaviour
                 gripperPublisher = bridgeManager.CreatePublisher<JointStateMessage>("main_gripper/gripper_command");
 
                 CheckRobotOnlineStatus();
+                RecordInitialCameraPose();
             }
             else
             {
@@ -401,6 +412,9 @@ public class Livekit : MonoBehaviour
 
         // 清理视频显示
         ClearVideoDisplay();
+
+        // Reset camera pose recording
+        cameraPoseRecorded = false;
 
         SetConnectionStatus(ConnectionStatus.Disconnected);
     }
@@ -956,18 +970,29 @@ public class Livekit : MonoBehaviour
             pointCloudObject.name = "PointCloudDisplay";
             Material m = Instantiate(pointCloudMaterial);
             MeshRenderer render = pointCloudObject.GetComponent<MeshRenderer>();
-            
+
             // Apply shader properties
             if (m != null)
             {
                 if (m.HasProperty("_PointSize")) m.SetFloat("_PointSize", .1f);
                 if (m.HasProperty("_Tint")) m.SetColor("_Tint", pointTint);
             }
-            
+
             render.material = m;
-            // optional : disable shadow casting and receiving for performance
             render.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             render.receiveShadows = false;
+
+            // Position point cloud based on initial camera pose
+            if (cameraPoseRecorded)
+            {
+                pointCloudObject.transform.position = initialCameraPosition;
+                pointCloudObject.transform.rotation = initialCameraRotation;
+                Debug.Log($"Point cloud positioned at initial camera pose: Pos={initialCameraPosition}, Rot={initialCameraRotation.eulerAngles}");
+            }
+            else
+            {
+                Debug.LogWarning("Camera pose not recorded, point cloud at world origin");
+            }
         }
 
         // assign the mesh to the MeshFilter
@@ -995,6 +1020,63 @@ public class Livekit : MonoBehaviour
             accumulatedPointCloudMesh = null;
         }
     }
+
+    /// <summary>
+    /// Get VR camera transform (CenterEyeAnchor or Camera.main)
+    /// </summary>
+    private Transform GetVRCamera()
+    {
+        if (vrCameraTransform != null)
+        {
+            return vrCameraTransform;
+        }
+
+        // Try to find OVRCameraRig's CenterEyeAnchor
+        GameObject ovrCameraRig = GameObject.Find("OVRCameraRig");
+        if (ovrCameraRig != null)
+        {
+            Transform centerEye = ovrCameraRig.transform.Find("TrackingSpace/CenterEyeAnchor");
+            if (centerEye != null)
+            {
+                vrCameraTransform = centerEye;
+                return centerEye;
+            }
+        }
+
+        // Fallback to Camera.main
+        if (Camera.main != null)
+        {
+            return Camera.main.transform;
+        }
+
+        Debug.LogWarning("No VR camera found!");
+        return null;
+    }
+
+    /// <summary>
+    /// Record initial camera pose when robot connects
+    /// </summary>
+    private void RecordInitialCameraPose()
+    {
+        Transform camera = GetVRCamera();
+        if (camera != null)
+        {
+            initialCameraPosition = camera.position;
+            // Add 180 degree X rotation to face the point cloud correctly
+            initialCameraRotation = camera.rotation * Quaternion.Euler(-90f, 0f, 90f);
+            cameraPoseRecorded = true;
+            Debug.Log($"Recorded initial camera pose: Pos={initialCameraPosition}, Rot={initialCameraRotation.eulerAngles}");
+        }
+        else
+        {
+            Debug.LogError("Failed to record initial camera pose - no camera found!");
+            cameraPoseRecorded = false;
+        }
+    }
+
+    #endregion
+
+    #region 相机处理
 
     #endregion
 }
