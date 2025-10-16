@@ -49,8 +49,8 @@ public class Livekit : MonoBehaviour
     //public string url = "wss://zwindz1-lam2j1uj.livekit.cloud";
     //public string token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NjA3MzI5ODYsImlzcyI6IkFQSXduZkVoTmNUY2ZzQSIsIm5iZiI6MTc1MTczMjk4Niwic3ViIjoiVlIiLCJ2aWRlbyI6eyJjYW5QdWJsaXNoIjp0cnVlLCJjYW5QdWJsaXNoRGF0YSI6dHJ1ZSwiY2FuU3Vic2NyaWJlIjp0cnVlLCJyb29tIjoibXktcm9vbSIsInJvb21Kb2luIjp0cnVlfH0.oGMrOIDNqyilOWw-6FgqpSKBzyIEp7pZG_FkFtPXji8";
 
-    public string url = "ws://47.111.148.68:7880";
-    public string token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE4MjY5NjU3ODIsImlzcyI6InVuaXgiLCJuYW1lIjoidW5pdHkiLCJuYmYiOjE3NTQ5NjU3ODIsInN1YiI6InVuaXR5IiwidmlkZW8iOnsicm9vbSI6ImRpbmdkYW5nIiwicm9vbUpvaW4iOnRydWV9fQ.CADs5YcN1w5b7JJ8_WA_ruP_7NWIcKVZPkZ8SuwZChM";
+    public string url = "wss://livekit.zwind-robot.com";
+    public string token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjIxMjA2MzA5NDMsImlkZW50aXR5IjoidnIiLCJpc3MiOiJBUElIdEdUYVV2YzlGNHkiLCJuYW1lIjoidnIiLCJuYmYiOjE3NjA2MzQ1NDMsInN1YiI6InZyIiwidmlkZW8iOnsicm9vbSI6InRlc3Rfcm9vbSIsInJvb21Kb2luIjp0cnVlfX0.j6HIfGId5GIVFjY0th28XneEgDiQ0Vixqf63rehnGr4";
 
     [Header("UI References")]
     public GameObject VideoStreamObject;
@@ -65,6 +65,12 @@ public class Livekit : MonoBehaviour
     public Sprite connectSprite;
     public Sprite robotOfflineSprite;
     public Sprite teleopSprite;
+
+    [Header("Point Cloud Settings")]
+    [Tooltip("Maximum number of point cloud frames to accumulate")]
+    public int pointCloudBufferSize = 30;
+    [Tooltip("Color tint applied to point cloud")]
+    public Color pointTint = Color.white;
 
     #endregion
 
@@ -85,6 +91,11 @@ public class Livekit : MonoBehaviour
 
     // multi-frame pointcloud assembly
     private Dictionary<int, PointCloudFrame> pointCloudFrames = new Dictionary<int, PointCloudFrame>();
+    
+    // Point cloud ring buffer for accumulating multiple frames
+    private Queue<Mesh> pointCloudRingBuffer = new Queue<Mesh>();
+    private Mesh accumulatedPointCloudMesh = null;
+    private bool needsRebuild = false;
 
     /// <summary>
     /// point cloud frame data structure for multi-frame assembly
@@ -149,11 +160,19 @@ public class Livekit : MonoBehaviour
     {
         HandleVRInput();
         PublishTeleopData();
+        
+        // Rebuild accumulated mesh if needed
+        if (needsRebuild)
+        {
+            RebuildAccumulatedMesh();
+            needsRebuild = false;
+        }
     }
 
     void OnDestroy()
     {
         Disconnect();
+        CleanupPointCloudBuffer();
     }
 
     #endregion
@@ -806,14 +825,121 @@ public class Livekit : MonoBehaviour
         var mesh = decodingTask.Result;
         if (mesh != null)
         {
-            //// Keep CPU copy to allow safe inspections (e.g., colors) if needed
-            //mesh.UploadMeshData(false);
-            UpdatePointCloudDisplay(mesh, frameId);
+            // Configure mesh for point rendering
+            mesh.indexFormat = mesh.vertexCount > 65535 ? IndexFormat.UInt32 : IndexFormat.UInt16;
+            var indices = Enumerable.Range(0, mesh.vertexCount).ToArray();
+            mesh.SetIndices(indices, MeshTopology.Points, 0, false);
+            
+            // Add to ring buffer
+            AddMeshToRingBuffer(mesh);
         }
         else
         {
             Debug.LogWarning($"Failed to decode point cloud frame {frameId}: mesh is null");
         }
+    }
+
+    /// <summary>
+    /// Add a decoded mesh to the ring buffer
+    /// </summary>
+    private void AddMeshToRingBuffer(Mesh newMesh)
+    {
+        // Add new mesh to buffer
+        pointCloudRingBuffer.Enqueue(newMesh);
+        
+        // Remove oldest mesh if buffer is full
+        if (pointCloudRingBuffer.Count > pointCloudBufferSize)
+        {
+            var oldMesh = pointCloudRingBuffer.Dequeue();
+            if (oldMesh != null)
+            {
+                Destroy(oldMesh);
+            }
+        }
+        
+        // Mark for rebuild
+        needsRebuild = true;
+    }
+
+    /// <summary>
+    /// Rebuild accumulated mesh from all meshes in ring buffer
+    /// </summary>
+    private void RebuildAccumulatedMesh()
+    {
+        if (pointCloudRingBuffer.Count == 0)
+        {
+            return;
+        }
+
+        // Destroy old accumulated mesh
+        if (accumulatedPointCloudMesh != null)
+        {
+            Destroy(accumulatedPointCloudMesh);
+        }
+
+        // Create new accumulated mesh
+        accumulatedPointCloudMesh = new Mesh();
+        accumulatedPointCloudMesh.name = "AccumulatedPointCloud";
+
+        List<Vector3> allVertices = new List<Vector3>();
+        List<Color32> allColors = new List<Color32>();
+        List<int> allIndices = new List<int>();
+
+        int vertexOffset = 0;
+        foreach (var mesh in pointCloudRingBuffer)
+        {
+            if (mesh == null) continue;
+
+            // Add vertices
+            Vector3[] vertices = mesh.vertices;
+            allVertices.AddRange(vertices);
+
+            // Add colors (or default white if no colors)
+            if (mesh.colors32 != null && mesh.colors32.Length == vertices.Length)
+            {
+                allColors.AddRange(mesh.colors32);
+            }
+            else if (mesh.colors != null && mesh.colors.Length == vertices.Length)
+            {
+                Color32[] colors32 = new Color32[mesh.colors.Length];
+                for (int i = 0; i < mesh.colors.Length; i++)
+                {
+                    colors32[i] = mesh.colors[i];
+                }
+                allColors.AddRange(colors32);
+            }
+            else
+            {
+                // Default to white
+                Color32[] defaultColors = new Color32[vertices.Length];
+                for (int i = 0; i < vertices.Length; i++)
+                {
+                    defaultColors[i] = Color.white;
+                }
+                allColors.AddRange(defaultColors);
+            }
+
+            // Add indices with offset
+            int[] indices = mesh.GetIndices(0);
+            for (int i = 0; i < indices.Length; i++)
+            {
+                allIndices.Add(indices[i] + vertexOffset);
+            }
+
+            vertexOffset += vertices.Length;
+        }
+
+        // Set mesh data
+        accumulatedPointCloudMesh.indexFormat = allVertices.Count > 65535 ? IndexFormat.UInt32 : IndexFormat.UInt16;
+        accumulatedPointCloudMesh.SetVertices(allVertices);
+        accumulatedPointCloudMesh.SetColors(allColors);
+        accumulatedPointCloudMesh.SetIndices(allIndices.ToArray(), MeshTopology.Points, 0, false);
+        accumulatedPointCloudMesh.RecalculateBounds();
+
+        Debug.Log($"Accumulated {pointCloudRingBuffer.Count} frames with total {allVertices.Count} vertices");
+
+        // Update display
+        UpdatePointCloudDisplay(accumulatedPointCloudMesh, -1);
     }
 
     /// <summary>
@@ -829,9 +955,15 @@ public class Livekit : MonoBehaviour
             Destroy(pointCloudObject.GetComponent<Collider>());
             pointCloudObject.name = "PointCloudDisplay";
             Material m = Instantiate(pointCloudMaterial);
-            //m.SetFloat("_PointSize", 1.0f);
             MeshRenderer render = pointCloudObject.GetComponent<MeshRenderer>();
-            if (m.HasProperty("_Tint")) m.SetColor("_Tint", Color.white);
+            
+            // Apply shader properties
+            if (m != null)
+            {
+                if (m.HasProperty("_PointSize")) m.SetFloat("_PointSize", .1f);
+                if (m.HasProperty("_Tint")) m.SetColor("_Tint", pointTint);
+            }
+            
             render.material = m;
             // optional : disable shadow casting and receiving for performance
             render.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
@@ -839,16 +971,29 @@ public class Livekit : MonoBehaviour
         }
 
         // assign the mesh to the MeshFilter
-        bool hasColors = (mesh.colors32 != null && mesh.colors32.Length == mesh.vertexCount) ||
-                         (mesh.colors != null && mesh.colors.Length == mesh.vertexCount);
-        if (!hasColors)
-        {
-            Debug.LogWarning($"Decoded mesh has no vertex colors (frame {frameId}). Using material tint color.");
-        }
         var meshFilter = pointCloudObject.GetComponent<MeshFilter>();
         meshFilter.mesh = mesh;
+    }
 
-        //Debug.Log($"Point cloud frame {frameId} applied to display object (hasColors={hasColors})");
+    /// <summary>
+    /// Clean up all meshes in the ring buffer
+    /// </summary>
+    private void CleanupPointCloudBuffer()
+    {
+        foreach (var mesh in pointCloudRingBuffer)
+        {
+            if (mesh != null)
+            {
+                Destroy(mesh);
+            }
+        }
+        pointCloudRingBuffer.Clear();
+
+        if (accumulatedPointCloudMesh != null)
+        {
+            Destroy(accumulatedPointCloudMesh);
+            accumulatedPointCloudMesh = null;
+        }
     }
 
     #endregion
