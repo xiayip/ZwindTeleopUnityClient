@@ -217,6 +217,20 @@ public class LivekitController : MonoBehaviour
         ros2Publisher?.CallGoToTapPose();
     }
 
+    /// <summary>
+    /// Go to sleep pose
+    /// </summary>
+    public void OnClickGoToSleepPose()
+    {
+        if (connectionManager?.CurrentStatus != ConnectionStatus.RobotOnlineIdle)
+        {
+            Debug.LogWarning("Robot is not in idle state, cannot execute sleep pose command");
+            return;
+        }
+
+        ros2Publisher?.CallGoToSleepPose();
+    }
+
     #endregion
 
     #region LiveKit Event Handling

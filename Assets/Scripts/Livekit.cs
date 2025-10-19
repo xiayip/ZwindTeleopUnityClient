@@ -138,6 +138,14 @@ public class Livekit : MonoBehaviour
     }
 
     /// <summary>
+    /// Go to sleep pose - backward compatible
+    /// </summary>
+    public void onClickGoToSleepPose()
+    {
+        livekitController?.OnClickGoToSleepPose();
+    }
+
+    /// <summary>
     /// Get connection manager component - for accessing connection status
     /// </summary>
     public ConnectionManager GetConnectionManager()

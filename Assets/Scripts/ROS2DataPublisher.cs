@@ -218,6 +218,20 @@ public class ROS2DataPublisher : MonoBehaviour
     }
 
     /// <summary>
+    /// Call go to sleep pose service
+    /// </summary>
+    public void CallGoToSleepPose()
+    {
+        if (bridgeManager == null) return;
+
+        bridgeManager.CallService("goto_sleep_pose", "std_srvs/srv/Trigger", new Dictionary<string, object>(), response =>
+        {
+            bool success = response?.ContainsKey("success") == true && GetBoolValue(response["success"]);
+            Debug.Log($"goto_sleep_pose {(success ? "success" : "failed")}");
+        });
+    }
+
+    /// <summary>
     /// Helper method: Get boolean value
     /// </summary>
     private bool GetBoolValue(object value)
