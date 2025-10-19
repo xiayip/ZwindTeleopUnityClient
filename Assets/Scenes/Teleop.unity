@@ -181,21 +181,21 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5a001ada558697f45ba9a6f2160b6f71, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Livekit
-  url: wss://livekit.zwind-robot.com
-  token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjIxMjA2MzA5NDMsImlkZW50aXR5IjoidnIiLCJpc3MiOiJBUElIdEdUYVV2YzlGNHkiLCJuYW1lIjoidnIiLCJuYmYiOjE3NjA2MzQ1NDMsInN1YiI6InZyIiwidmlkZW8iOnsicm9vbSI6InRlc3Rfcm9vbSIsInJvb21Kb2luIjp0cnVlfX0.j6HIfGId5GIVFjY0th28XneEgDiQ0Vixqf63rehnGr4
-  VideoStreamObject: {fileID: 446980018}
-  infoText: {fileID: 1596894346}
-  connectStatusText: {fileID: 1643071327}
-  buttonStatusText: {fileID: 1932851425}
-  connectStatusIcon: {fileID: 516241772}
-  pointCloudMaterial: {fileID: 2100000, guid: 948b27ac1d989e14db33f5755a7729d0, type: 2}
-  disConnectSprite: {fileID: 21300000, guid: a5ba7ac8e7c74f142bb6ddb055fae74e, type: 3}
-  connectSprite: {fileID: 21300000, guid: 689fbbf121969704bb7d556d8a07eb60, type: 3}
-  robotOfflineSprite: {fileID: 0}
-  teleopSprite: {fileID: 0}
-  pointCloudBufferSize: 30
-  pointTint: {r: 1, g: 1, b: 1, a: 1}
-  vrCameraTransform: {fileID: 0}
+  _url: wss://livekit.zwind-robot.com
+  _token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjIxMjA2MzA5NDMsImlkZW50aXR5IjoidnIiLCJpc3MiOiJBUElIdEdUYVV2YzlGNHkiLCJuYW1lIjoidnIiLCJuYmYiOjE3NjA2MzQ1NDMsInN1YiI6InZyIiwidmlkZW8iOnsicm9vbSI6InRlc3Rfcm9vbSIsInJvb21Kb2luIjp0cnVlfX0.j6HIfGId5GIVFjY0th28XneEgDiQ0Vixqf63rehnGr4
+  _videoStreamObject: {fileID: 446980018}
+  _infoText: {fileID: 802393867}
+  _connectStatusText: {fileID: 1643071327}
+  _buttonStatusText: {fileID: 1932851425}
+  _connectStatusIcon: {fileID: 357811188}
+  _pointCloudMaterial: {fileID: 2100000, guid: 948b27ac1d989e14db33f5755a7729d0, type: 2}
+  _disConnectSprite: {fileID: 21300000, guid: a5ba7ac8e7c74f142bb6ddb055fae74e, type: 3}
+  _connectSprite: {fileID: 21300000, guid: 689fbbf121969704bb7d556d8a07eb60, type: 3}
+  _robotOfflineSprite: {fileID: 0}
+  _teleopSprite: {fileID: 0}
+  _pointCloudBufferSize: 30
+  _pointTint: {r: 1, g: 1, b: 1, a: 1}
+  _vrCameraTransform: {fileID: 0}
 --- !u!4 &64389668
 Transform:
   m_ObjectHideFlags: 0
@@ -673,7 +673,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -2353561579252473944, guid: 708bb04189b8488418aa725e7f94bbe8, type: 3}
       propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_MethodName
-      value: onClicGoToPickPose
+      value: onClickGoToPickPose
       objectReference: {fileID: 0}
     - target: {fileID: -2353561579252473944, guid: 708bb04189b8488418aa725e7f94bbe8, type: 3}
       propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_TargetAssemblyTypeName
@@ -1479,7 +1479,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -2353561579252473944, guid: 708bb04189b8488418aa725e7f94bbe8, type: 3}
       propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_MethodName
-      value: onClicGoToTapPose
+      value: onClickGoToTapPose
       objectReference: {fileID: 0}
     - target: {fileID: -2353561579252473944, guid: 708bb04189b8488418aa725e7f94bbe8, type: 3}
       propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_TargetAssemblyTypeName

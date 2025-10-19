@@ -124,7 +124,7 @@ public class Livekit : MonoBehaviour
     /// <summary>
     /// Go to pick pose - backward compatible
     /// </summary>
-    public void onClicGoToPickPose()
+    public void onClickGoToPickPose()
     {
         livekitController?.OnClickGoToPickPose();
     }
@@ -132,7 +132,7 @@ public class Livekit : MonoBehaviour
     /// <summary>
     /// Go to tap pose - backward compatible
     /// </summary>
-    public void onClicGoToTapPose()
+    public void onClickGoToTapPose()
     {
         livekitController?.OnClickGoToTapPose();
     }
