@@ -194,8 +194,8 @@ MonoBehaviour:
   robotOfflineSprite: {fileID: 0}
   teleopSprite: {fileID: 0}
   pointCloudBufferSize: 30
-  pointSize: 5
   pointTint: {r: 1, g: 1, b: 1, a: 1}
+  vrCameraTransform: {fileID: 0}
 --- !u!4 &64389668
 Transform:
   m_ObjectHideFlags: 0
