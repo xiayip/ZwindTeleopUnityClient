@@ -9,7 +9,7 @@ using static LiveKit.Proto.DataStream.Types;
 namespace LiveKitROS2Bridge
 {
     /// <summary>
-    /// ROS2消息基类
+    /// ROS2 message base class
     /// </summary>
     public abstract class ROS2Message
     {
@@ -20,7 +20,7 @@ namespace LiveKitROS2Bridge
     }
 
     /// <summary>
-    /// Twist消息 (geometry_msgs/Twist)
+    /// Twist message (geometry_msgs/Twist)
     /// </summary>
     public class TwistMessage : ROS2Message
     {
@@ -71,7 +71,7 @@ namespace LiveKitROS2Bridge
     }
 
     /// <summary>
-    /// String消息 (std_msgs/String)
+    /// String message (std_msgs/String)
     /// </summary>
     public class StringMessage : ROS2Message
     {
@@ -97,7 +97,7 @@ namespace LiveKitROS2Bridge
     }
 
     /// <summary>
-    /// PoseStamped消息 (geometry_msgs/PoseStamped)
+    /// PoseStamped message (geometry_msgs/PoseStamped)
     /// </summary>
     public class PoseStampedMessage : ROS2Message
     {
@@ -137,7 +137,7 @@ namespace LiveKitROS2Bridge
     }
 
     /// <summary>
-    /// 自定义消息支持
+    /// Custom message support
     /// </summary>
     public class CustomMessage : ROS2Message
     {
@@ -222,8 +222,8 @@ namespace LiveKitROS2Bridge
     }
 
     /// <summary>
-    /// LiveKit ROS2 发布者
-    /// 提供类似ROS2 Publisher的接口，实际通过LiveKit Data Packets发送
+    /// LiveKit ROS2 Publisher
+    /// Provides an interface for ROS2 Publisher to transmit LiveKit Data Packets
     /// </summary>
     public class LiveKitROS2Publisher<T> where T : ROS2Message
     {
@@ -252,7 +252,7 @@ namespace LiveKitROS2Bridge
         }
 
         /// <summary>
-        /// 发布ROS2消息
+        /// Publish ROS2 message
         /// </summary>
         public void Publish(T message)
         {
@@ -263,7 +263,7 @@ namespace LiveKitROS2Bridge
 
             try
             {
-                // 构造ROS2消息包
+                // Create ROS2 message packet
                 var ros2Packet = new ROS2DataPacket
                 {
                     PacketType = "ros2_message",
@@ -274,11 +274,11 @@ namespace LiveKitROS2Bridge
                     SequenceId = GenerateSequenceId()
                 };
 
-                // 序列化为JSON
+                // Serialize to JSON
                 var jsonData = JsonSerializer.Serialize(ros2Packet, _jsonOptions);
                 var dataBytes = System.Text.Encoding.Default.GetBytes(jsonData);
 
-                // 通过LiveKit发送 (同步方法)
+                // Publish data via LiveKit (same as before)
                 _room.LocalParticipant.PublishData(dataBytes, reliable: true);
             }
             catch (Exception ex)
@@ -295,7 +295,7 @@ namespace LiveKitROS2Bridge
     }
 
     /// <summary>
-    /// ROS2数据包格式
+    /// ROS2 data packet format
     /// </summary>
     public class ROS2DataPacket
     {
@@ -308,7 +308,7 @@ namespace LiveKitROS2Bridge
     }
 
     /// <summary>
-    /// LiveKit ROS2 桥接管理器
+    /// LiveKit ROS2 bridge manager
     /// </summary>
     public class LiveKitROS2BridgeManager
     {
@@ -332,12 +332,12 @@ namespace LiveKitROS2Bridge
                 WriteIndented = false
             };
 
-            // 注册数据接收事件（用于接收Python端的反馈）
+            // Subscribe to data received event
             _room.DataReceived += OnDataReceived;
         }
 
         /// <summary>
-        /// 创建ROS2发布者
+        /// Create a ROS2 message publisher
         /// </summary>
         public LiveKitROS2Publisher<T> CreatePublisher<T>(string topicName, int queueSize = 10) where T : ROS2Message, new()
         {
@@ -352,7 +352,7 @@ namespace LiveKitROS2Bridge
         }
 
         /// <summary>
-        /// 创建自定义消息发布者
+        /// Create a custom ROS2 message publisher
         /// </summary>
         public LiveKitROS2Publisher<CustomMessage> CreateCustomPublisher(string topicName, string messageType, int queueSize = 10)
         {
@@ -364,7 +364,7 @@ namespace LiveKitROS2Bridge
         }
 
         /// <summary>
-        /// 发送ROS2服务调用
+        /// Call ROS2 service
         /// </summary>
         public void CallService(string serviceName, string serviceType, Dictionary<string, object> request, Action<Dictionary<string, object>> responseCallback = null)
         {
@@ -402,14 +402,14 @@ namespace LiveKitROS2Bridge
 
                     if (packetType == "ros2_service_response")
                     {
-                        // 处理服务响应
+                        // Handle ROS2 service response
                         HandleServiceResponse(packet);
                     }
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"处理接收数据时出错: {ex.Message}");
+                Console.WriteLine($"Error occurred while processing data: {ex.Message}");
             }
         }
 
@@ -431,7 +431,7 @@ namespace LiveKitROS2Bridge
             }
             catch (Exception ex)
             {
-                UnityEngine.Debug.LogError($"处理服务响应时出错: {ex.Message}");
+                UnityEngine.Debug.LogError($"Error occurred while processing service response: {ex.Message}");
             }
         }
 
@@ -446,7 +446,7 @@ namespace LiveKitROS2Bridge
     }
 
     /// <summary>
-    /// ROS2服务包格式
+    /// ROS2 service packet
     /// </summary>
     public class ROS2ServicePacket
     {
