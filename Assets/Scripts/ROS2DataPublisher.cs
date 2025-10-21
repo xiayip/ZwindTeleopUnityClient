@@ -190,45 +190,114 @@ public class ROS2DataPublisher : MonoBehaviour
     }
 
     /// <summary>
-    /// Call go to pick pose service
+    /// Call go to pick pose action
     /// </summary>
     public void CallGoToPickPose()
     {
         if (bridgeManager == null) return;
 
-        bridgeManager.CallService("goto_pick_pose", "std_srvs/srv/Trigger", new Dictionary<string, object>(), response =>
+        var goal = new Dictionary<string, object>
         {
-            bool success = response?.ContainsKey("success") == true && GetBoolValue(response["success"]);
-            Debug.Log($"goto_pick_pose {(success ? "success" : "failed")}");
-        });
+            ["target_tree"] = "ArmReadyPickPoseBT"
+        };
+
+        string goalId = bridgeManager.SendActionGoal(
+            actionName: "/behavior_server",
+            actionType: "btcpp_ros2_interfaces/action/ExecuteTree",
+            goal: goal,
+            onGoalResponse: (response) =>
+            {
+                bool accepted = response?.ContainsKey("accepted") == true && Convert.ToBoolean(response["accepted"]);
+                Debug.Log($"goto_pick_pose goal {(accepted ? "ACCEPTED" : "REJECTED")}");
+            },
+            onFeedback: (feedback) =>
+            {
+                // Optional: Handle feedback during execution
+                Debug.Log("goto_pick_pose executing...");
+            },
+            onResult: (result) =>
+            {
+                int status = result?.ContainsKey("status") == true ? Convert.ToInt32(result["status"]) : 0;
+                bool success = status == 4; // 4 = SUCCEEDED
+                Debug.Log($"goto_pick_pose {(success ? "SUCCESS" : "FAILED")} (status: {status})");
+            }
+        );
+
+        Debug.Log($"goto_pick_pose action goal sent (ID: {goalId})");
     }
 
     /// <summary>
-    /// Call go to tap pose service
+    /// Call go to tap pose action
     /// </summary>
     public void CallGoToTapPose()
     {
         if (bridgeManager == null) return;
 
-        bridgeManager.CallService("goto_tap_pose", "std_srvs/srv/Trigger", new Dictionary<string, object>(), response =>
+        var goal = new Dictionary<string, object>
         {
-            bool success = response?.ContainsKey("success") == true && GetBoolValue(response["success"]);
-            Debug.Log($"goto_tap_pose {(success ? "success" : "failed")}");
-        });
+            ["target_tree"] = "ArmReadyTapPoseBT"
+        };
+
+        string goalId = bridgeManager.SendActionGoal(
+            actionName: "/behavior_server",
+            actionType: "btcpp_ros2_interfaces/action/ExecuteTree",
+            goal: goal,
+            onGoalResponse: (response) =>
+            {
+                bool accepted = response?.ContainsKey("accepted") == true && Convert.ToBoolean(response["accepted"]);
+                Debug.Log($"goto_tap_pose goal {(accepted ? "ACCEPTED" : "REJECTED")}");
+            },
+            onFeedback: (feedback) =>
+            {
+                // Optional: Handle feedback during execution
+                Debug.Log("goto_tap_pose executing...");
+            },
+            onResult: (result) =>
+            {
+                int status = result?.ContainsKey("status") == true ? Convert.ToInt32(result["status"]) : 0;
+                bool success = status == 4; // 4 = SUCCEEDED
+                Debug.Log($"goto_tap_pose {(success ? "SUCCESS" : "FAILED")} (status: {status})");
+            }
+        );
+
+        Debug.Log($"goto_tap_pose action goal sent (ID: {goalId})");
     }
 
     /// <summary>
-    /// Call go to sleep pose service
+    /// Call go to sleep pose action
     /// </summary>
     public void CallGoToSleepPose()
     {
         if (bridgeManager == null) return;
 
-        bridgeManager.CallService("goto_sleep_pose", "std_srvs/srv/Trigger", new Dictionary<string, object>(), response =>
+        var goal = new Dictionary<string, object>
         {
-            bool success = response?.ContainsKey("success") == true && GetBoolValue(response["success"]);
-            Debug.Log($"goto_sleep_pose {(success ? "success" : "failed")}");
-        });
+            ["target_tree"] = "ArmSleepPoseBT"
+        };
+
+        string goalId = bridgeManager.SendActionGoal(
+            actionName: "/behavior_server",
+            actionType: "btcpp_ros2_interfaces/action/ExecuteTree",
+            goal: goal,
+            onGoalResponse: (response) =>
+            {
+                bool accepted = response?.ContainsKey("accepted") == true && Convert.ToBoolean(response["accepted"]);
+                Debug.Log($"goto_sleep_pose goal {(accepted ? "ACCEPTED" : "REJECTED")}");
+            },
+            onFeedback: (feedback) =>
+            {
+                // Optional: Handle feedback during execution
+                Debug.Log("goto_sleep_pose executing...");
+            },
+            onResult: (result) =>
+            {
+                int status = result?.ContainsKey("status") == true ? Convert.ToInt32(result["status"]) : 0;
+                bool success = status == 4; // 4 = SUCCEEDED
+                Debug.Log($"goto_sleep_pose {(success ? "SUCCESS" : "FAILED")} (status: {status})");
+            }
+        );
+
+        Debug.Log($"goto_sleep_pose action goal sent (ID: {goalId})");
     }
 
     /// <summary>

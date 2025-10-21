@@ -317,6 +317,7 @@ namespace LiveKitROS2Bridge
         private readonly JsonSerializerOptions _jsonOptions;
 
         private readonly Dictionary<string, Action<Dictionary<string, object>>> _serviceResponseCallbacks;
+        private readonly Dictionary<string, ROS2ActionCallbacks> _actionCallbacks;
         public Room Room => _room;
         public bool IsConnected => _room?.ConnectionState == ConnectionState.ConnConnected;
 
@@ -325,6 +326,7 @@ namespace LiveKitROS2Bridge
             _room = room ?? throw new ArgumentNullException(nameof(room));
             _publishers = new Dictionary<string, object>();
             _serviceResponseCallbacks = new Dictionary<string, Action<Dictionary<string, object>>>();
+            _actionCallbacks = new Dictionary<string, ROS2ActionCallbacks>();
 
             _jsonOptions = new JsonSerializerOptions
             {
@@ -389,6 +391,95 @@ namespace LiveKitROS2Bridge
             _room.LocalParticipant.PublishData(dataBytes, reliable: true);
         }
 
+        /// <summary>
+        /// Send ROS2 action goal
+        /// </summary>
+        public string SendActionGoal(
+            string actionName, 
+            string actionType, 
+            Dictionary<string, object> goal,
+            Action<Dictionary<string, object>> onGoalResponse = null,
+            Action<Dictionary<string, object>> onFeedback = null,
+            Action<Dictionary<string, object>> onResult = null)
+        {
+            if (!IsConnected)
+            {
+                throw new InvalidOperationException("LiveKit room is not connected");
+            }
+
+            var goalId = Guid.NewGuid().ToString();
+            var actionPacket = new ROS2ActionGoalPacket
+            {
+                PacketType = "ros2_action_send_goal",
+                ActionName = actionName,
+                ActionType = actionType,
+                Goal = goal,
+                GoalId = goalId,
+                Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0
+            };
+
+            // Register callbacks
+            if (onGoalResponse != null || onFeedback != null || onResult != null)
+            {
+                _actionCallbacks[goalId] = new ROS2ActionCallbacks
+                {
+                    OnGoalResponse = onGoalResponse,
+                    OnFeedback = onFeedback,
+                    OnResult = onResult
+                };
+            }
+
+            try
+            {
+                var jsonData = JsonSerializer.Serialize(actionPacket, _jsonOptions);
+                var dataBytes = System.Text.Encoding.UTF8.GetBytes(jsonData);
+                _room.LocalParticipant.PublishData(dataBytes, reliable: true);
+                
+                Debug.Log($"Action goal sent: {actionName} (ID: {goalId})");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Failed to send action goal: {ex.Message}");
+                _actionCallbacks.Remove(goalId);
+                throw;
+            }
+
+            return goalId;
+        }
+
+        /// <summary>
+        /// Cancel ROS2 action goal
+        /// </summary>
+        public void CancelActionGoal(string actionName, string goalId)
+        {
+            if (!IsConnected)
+            {
+                throw new InvalidOperationException("LiveKit room is not connected");
+            }
+
+            var cancelPacket = new ROS2ActionCancelPacket
+            {
+                PacketType = "ros2_action_cancel_goal",
+                ActionName = actionName,
+                GoalId = goalId,
+                Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0
+            };
+
+            try
+            {
+                var jsonData = JsonSerializer.Serialize(cancelPacket, _jsonOptions);
+                var dataBytes = System.Text.Encoding.UTF8.GetBytes(jsonData);
+                _room.LocalParticipant.PublishData(dataBytes, reliable: true);
+                
+                Debug.Log($"Action goal cancel requested: {actionName} (ID: {goalId})");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Failed to cancel action goal: {ex.Message}");
+                throw;
+            }
+        }
+
         private void OnDataReceived(byte[] data, Participant participant, DataPacketKind kind, string topic)
         {
             try
@@ -404,6 +495,21 @@ namespace LiveKitROS2Bridge
                     {
                         // Handle ROS2 service response
                         HandleServiceResponse(packet);
+                    }
+                    else if (packetType == "ros2_action_goal_response")
+                    {
+                        // Handle ROS2 action goal response (accepted/rejected)
+                        HandleActionGoalResponse(packet);
+                    }
+                    else if (packetType == "ros2_action_feedback")
+                    {
+                        // Handle ROS2 action feedback
+                        HandleActionFeedback(packet);
+                    }
+                    else if (packetType == "ros2_action_result")
+                    {
+                        // Handle ROS2 action result
+                        HandleActionResult(packet);
                     }
                 }
             }
@@ -435,6 +541,81 @@ namespace LiveKitROS2Bridge
             }
         }
 
+        private void HandleActionGoalResponse(Dictionary<string, object> packet)
+        {
+            try
+            {
+                if (packet.ContainsKey("goalId"))
+                {
+                    string goalId = packet["goalId"].ToString();
+                    bool accepted = packet.ContainsKey("accepted") && 
+                                   Convert.ToBoolean(packet["accepted"]);
+
+                    Debug.Log($"Action goal response: Goal {goalId} {(accepted ? "ACCEPTED" : "REJECTED")}");
+
+                    if (_actionCallbacks.TryGetValue(goalId, out var callbacks))
+                    {
+                        callbacks.OnGoalResponse?.Invoke(packet);
+                        
+                        // If rejected, remove callbacks
+                        if (!accepted)
+                        {
+                            _actionCallbacks.Remove(goalId);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Error processing action goal response: {ex.Message}");
+            }
+        }
+
+        private void HandleActionFeedback(Dictionary<string, object> packet)
+        {
+            try
+            {
+                if (packet.ContainsKey("goalId"))
+                {
+                    string goalId = packet["goalId"].ToString();
+
+                    if (_actionCallbacks.TryGetValue(goalId, out var callbacks))
+                    {
+                        callbacks.OnFeedback?.Invoke(packet);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Error processing action feedback: {ex.Message}");
+            }
+        }
+
+        private void HandleActionResult(Dictionary<string, object> packet)
+        {
+            try
+            {
+                if (packet.ContainsKey("goalId"))
+                {
+                    string goalId = packet["goalId"].ToString();
+
+                    Debug.Log($"Action result received for goal {goalId}");
+
+                    if (_actionCallbacks.TryGetValue(goalId, out var callbacks))
+                    {
+                        callbacks.OnResult?.Invoke(packet);
+                        
+                        // Remove callbacks after result received
+                        _actionCallbacks.Remove(goalId);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Error processing action result: {ex.Message}");
+            }
+        }
+
         public void Dispose()
         {
             if (_room != null)
@@ -442,6 +623,7 @@ namespace LiveKitROS2Bridge
                 _room.DataReceived -= OnDataReceived;
             }
             _serviceResponseCallbacks?.Clear();
+            _actionCallbacks?.Clear();
         }
     }
 
@@ -456,5 +638,39 @@ namespace LiveKitROS2Bridge
         public Dictionary<string, object> Request { get; set; } = new Dictionary<string, object>();
         public string RequestId { get; set; } = "";
         public double Timestamp { get; set; }
+    }
+
+    /// <summary>
+    /// ROS2 action goal packet
+    /// </summary>
+    public class ROS2ActionGoalPacket
+    {
+        public string PacketType { get; set; } = "ros2_action_send_goal";
+        public string ActionName { get; set; } = "";
+        public string ActionType { get; set; } = "";
+        public Dictionary<string, object> Goal { get; set; } = new Dictionary<string, object>();
+        public string GoalId { get; set; } = "";
+        public double Timestamp { get; set; }
+    }
+
+    /// <summary>
+    /// ROS2 action cancel packet
+    /// </summary>
+    public class ROS2ActionCancelPacket
+    {
+        public string PacketType { get; set; } = "ros2_action_cancel_goal";
+        public string ActionName { get; set; } = "";
+        public string GoalId { get; set; } = "";
+        public double Timestamp { get; set; }
+    }
+
+    /// <summary>
+    /// ROS2 action callbacks
+    /// </summary>
+    public class ROS2ActionCallbacks
+    {
+        public Action<Dictionary<string, object>> OnGoalResponse { get; set; }
+        public Action<Dictionary<string, object>> OnFeedback { get; set; }
+        public Action<Dictionary<string, object>> OnResult { get; set; }
     }
 }
