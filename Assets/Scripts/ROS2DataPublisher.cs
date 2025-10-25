@@ -169,24 +169,32 @@ public class ROS2DataPublisher : MonoBehaviour
     {
         if (bridgeManager == null) return;
 
-        bridgeManager.CallService("start_teleop", "std_srvs/srv/Trigger", new Dictionary<string, object>(), response =>
+        var goal = new Dictionary<string, object>
         {
-            try
+            ["target_tree"] = "SwitchToTeleopModeBT"
+        };
+        string goalId = bridgeManager.SendActionGoal(
+            actionName: "/behavior_server",
+            actionType: "btcpp_ros2_interfaces/action/ExecuteTree",
+            goal: goal,
+            onGoalResponse: (response) =>
             {
-                bool success = false;
-                if (response?.ContainsKey("success") == true)
-                {
-                    success = GetBoolValue(response["success"]);
-                    Debug.Log($"Teleop start service response: {success}");
-                }
+                bool accepted = response?.ContainsKey("accepted") == true && Convert.ToBoolean(response["accepted"]);
+                Debug.Log($"teleop_start goal {(accepted ? "ACCEPTED" : "REJECTED")}");
+            },
+            onFeedback: (feedback) =>
+            {
+                // Optional: Handle feedback during execution
+                Debug.Log("teleop_start executing...");
+            },
+            onResult: (result) =>
+            {
+                int status = result?.ContainsKey("status") == true ? Convert.ToInt32(result["status"]) : 0;
+                bool success = status == 4; // 4 = SUCCEEDED
+                Debug.Log($"teleop_start {(success ? "SUCCESS" : "FAILED")} (status: {status})");
                 onComplete?.Invoke(success);
             }
-            catch (Exception ex)
-            {
-                Debug.LogError($"Error processing service response: {ex.Message}");
-                onComplete?.Invoke(false);
-            }
-        });
+        );
     }
 
     /// <summary>
