@@ -66,6 +66,24 @@ public class UIController : MonoBehaviour
                 connectStatusIcon.color = config.statusColor;
             }
         }
+
+        // Control VideoStreamObject visibility based on status
+        UpdateVideoStreamVisibility(status);
+    }
+
+    /// <summary>
+    /// Update video stream visibility based on connection status
+    /// </summary>
+    private void UpdateVideoStreamVisibility(ConnectionStatus status)
+    {
+        if (VideoStreamObject != null)
+        {
+            // Hide video stream in movebase control mode, show in other modes
+            bool shouldShow = status != ConnectionStatus.RobotOnlineMovebase;
+            VideoStreamObject.SetActive(shouldShow);
+            
+            Debug.Log($"VideoStreamObject visibility: {(shouldShow ? "Visible" : "Hidden")} (Status: {status})");
+        }
     }
 
     /// <summary>
@@ -79,6 +97,7 @@ public class UIController : MonoBehaviour
             ConnectionStatus.RoomConnectedRobotOffline => robotOfflineSprite ?? disConnectSprite,
             ConnectionStatus.RobotOnlineIdle => connectSprite,
             ConnectionStatus.RobotOnlineTeleop => teleopSprite ?? connectSprite,
+            ConnectionStatus.RobotOnlineMovebase => connectSprite, // Use connect sprite for movebase mode
             _ => disConnectSprite
         };
     }
@@ -117,7 +136,7 @@ public class UIController : MonoBehaviour
     {
         if (VideoStreamObject != null)
         {
-            var image = VideoStreamObject.GetComponent<RawImage>();
+            var image = VideoStreamObject.GetComponentInChildren<RawImage>();
             if (image != null)
             {
                 image.color = Color.clear;
@@ -133,7 +152,7 @@ public class UIController : MonoBehaviour
     {
         if (VideoStreamObject != null)
         {
-            var image = VideoStreamObject.GetComponent<RawImage>();
+            var image = VideoStreamObject.GetComponentInChildren<RawImage>();
             if (image != null)
             {
                 image.color = Color.white;
