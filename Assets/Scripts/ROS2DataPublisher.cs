@@ -163,16 +163,22 @@ public class ROS2DataPublisher : MonoBehaviour
     }
 
     /// <summary>
-    /// Call ROS service to start teleop
+    /// Execute BehaviorTree action
     /// </summary>
-    public void CallTeleopStart(Action<bool> onComplete = null)
+    private string ExecuteBehaviorTree(string treeName, string actionDescription, Action<bool> onComplete = null)
     {
-        if (bridgeManager == null) return;
+        if (bridgeManager == null)
+        {
+            Debug.LogWarning($"{actionDescription} failed: bridge manager not initialized");
+            onComplete?.Invoke(false);
+            return null;
+        }
 
         var goal = new Dictionary<string, object>
         {
-            ["target_tree"] = "SwitchToTeleopModeBT"
+            ["target_tree"] = treeName
         };
+
         string goalId = bridgeManager.SendActionGoal(
             actionName: "/behavior_server",
             actionType: "btcpp_ros2_interfaces/action/ExecuteTree",
@@ -180,21 +186,35 @@ public class ROS2DataPublisher : MonoBehaviour
             onGoalResponse: (response) =>
             {
                 bool accepted = response?.ContainsKey("accepted") == true && Convert.ToBoolean(response["accepted"]);
-                Debug.Log($"teleop_start goal {(accepted ? "ACCEPTED" : "REJECTED")}");
+                Debug.Log($"{actionDescription} goal {(accepted ? "ACCEPTED" : "REJECTED")}");
+                if (!accepted)
+                {
+                    onComplete?.Invoke(false);
+                }
             },
             onFeedback: (feedback) =>
             {
-                // Optional: Handle feedback during execution
-                Debug.Log("teleop_start executing...");
+                Debug.Log($"{actionDescription} executing...");
             },
             onResult: (result) =>
             {
                 int status = result?.ContainsKey("status") == true ? Convert.ToInt32(result["status"]) : 0;
                 bool success = status == 4; // 4 = SUCCEEDED
-                Debug.Log($"teleop_start {(success ? "SUCCESS" : "FAILED")} (status: {status})");
+                Debug.Log($"{actionDescription} {(success ? "SUCCESS" : "FAILED")} (status: {status})");
                 onComplete?.Invoke(success);
             }
         );
+
+        Debug.Log($"{actionDescription} action goal sent (ID: {goalId})");
+        return goalId;
+    }
+
+    /// <summary>
+    /// Call ROS service to start teleop
+    /// </summary>
+    public void CallTeleopStart(Action<bool> onComplete = null)
+    {
+        ExecuteBehaviorTree("EnterTeleopModeBT", "teleop_start", onComplete);
     }
 
     /// <summary>
@@ -202,36 +222,7 @@ public class ROS2DataPublisher : MonoBehaviour
     /// </summary>
     public void CallGoToPickPose()
     {
-        if (bridgeManager == null) return;
-
-        var goal = new Dictionary<string, object>
-        {
-            ["target_tree"] = "ArmReadyPickPoseBT"
-        };
-
-        string goalId = bridgeManager.SendActionGoal(
-            actionName: "/behavior_server",
-            actionType: "btcpp_ros2_interfaces/action/ExecuteTree",
-            goal: goal,
-            onGoalResponse: (response) =>
-            {
-                bool accepted = response?.ContainsKey("accepted") == true && Convert.ToBoolean(response["accepted"]);
-                Debug.Log($"goto_pick_pose goal {(accepted ? "ACCEPTED" : "REJECTED")}");
-            },
-            onFeedback: (feedback) =>
-            {
-                // Optional: Handle feedback during execution
-                Debug.Log("goto_pick_pose executing...");
-            },
-            onResult: (result) =>
-            {
-                int status = result?.ContainsKey("status") == true ? Convert.ToInt32(result["status"]) : 0;
-                bool success = status == 4; // 4 = SUCCEEDED
-                Debug.Log($"goto_pick_pose {(success ? "SUCCESS" : "FAILED")} (status: {status})");
-            }
-        );
-
-        Debug.Log($"goto_pick_pose action goal sent (ID: {goalId})");
+        ExecuteBehaviorTree("ArmReadyPickPoseBT", "goto_pick_pose");
     }
 
     /// <summary>
@@ -239,36 +230,7 @@ public class ROS2DataPublisher : MonoBehaviour
     /// </summary>
     public void CallGoToTapPose()
     {
-        if (bridgeManager == null) return;
-
-        var goal = new Dictionary<string, object>
-        {
-            ["target_tree"] = "ArmReadyTapPoseBT"
-        };
-
-        string goalId = bridgeManager.SendActionGoal(
-            actionName: "/behavior_server",
-            actionType: "btcpp_ros2_interfaces/action/ExecuteTree",
-            goal: goal,
-            onGoalResponse: (response) =>
-            {
-                bool accepted = response?.ContainsKey("accepted") == true && Convert.ToBoolean(response["accepted"]);
-                Debug.Log($"goto_tap_pose goal {(accepted ? "ACCEPTED" : "REJECTED")}");
-            },
-            onFeedback: (feedback) =>
-            {
-                // Optional: Handle feedback during execution
-                Debug.Log("goto_tap_pose executing...");
-            },
-            onResult: (result) =>
-            {
-                int status = result?.ContainsKey("status") == true ? Convert.ToInt32(result["status"]) : 0;
-                bool success = status == 4; // 4 = SUCCEEDED
-                Debug.Log($"goto_tap_pose {(success ? "SUCCESS" : "FAILED")} (status: {status})");
-            }
-        );
-
-        Debug.Log($"goto_tap_pose action goal sent (ID: {goalId})");
+        ExecuteBehaviorTree("ArmReadyTapPoseBT", "goto_tap_pose");
     }
 
     /// <summary>
@@ -276,36 +238,7 @@ public class ROS2DataPublisher : MonoBehaviour
     /// </summary>
     public void CallGoToSleepPose()
     {
-        if (bridgeManager == null) return;
-
-        var goal = new Dictionary<string, object>
-        {
-            ["target_tree"] = "ArmSleepPoseBT"
-        };
-
-        string goalId = bridgeManager.SendActionGoal(
-            actionName: "/behavior_server",
-            actionType: "btcpp_ros2_interfaces/action/ExecuteTree",
-            goal: goal,
-            onGoalResponse: (response) =>
-            {
-                bool accepted = response?.ContainsKey("accepted") == true && Convert.ToBoolean(response["accepted"]);
-                Debug.Log($"goto_sleep_pose goal {(accepted ? "ACCEPTED" : "REJECTED")}");
-            },
-            onFeedback: (feedback) =>
-            {
-                // Optional: Handle feedback during execution
-                Debug.Log("goto_sleep_pose executing...");
-            },
-            onResult: (result) =>
-            {
-                int status = result?.ContainsKey("status") == true ? Convert.ToInt32(result["status"]) : 0;
-                bool success = status == 4; // 4 = SUCCEEDED
-                Debug.Log($"goto_sleep_pose {(success ? "SUCCESS" : "FAILED")} (status: {status})");
-            }
-        );
-
-        Debug.Log($"goto_sleep_pose action goal sent (ID: {goalId})");
+        ExecuteBehaviorTree("ArmSleepPoseBT", "goto_sleep_pose");
     }
 
     /// <summary>
