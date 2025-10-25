@@ -82,6 +82,20 @@ public class ROS2DataPublisher : MonoBehaviour
     }
 
     /// <summary>
+    /// Publish movebase control data
+    /// </summary>
+    public void PublishMovebaseControlData()
+    {
+        if (!IsInitialized || vrInputManager == null) return;
+
+        if (Time.time - lastPublishTime >= PUBLISH_INTERVAL)
+        {
+            PublishVelocityData();
+            lastPublishTime = Time.time;
+        }
+    }
+
+    /// <summary>
     /// Publish velocity data
     /// </summary>
     public void PublishVelocityData()
@@ -198,9 +212,12 @@ public class ROS2DataPublisher : MonoBehaviour
             },
             onResult: (result) =>
             {
-                int status = result?.ContainsKey("status") == true ? Convert.ToInt32(result["status"]) : 0;
-                bool success = status == 4; // 4 = SUCCEEDED
-                Debug.Log($"{actionDescription} {(success ? "SUCCESS" : "FAILED")} (status: {status})");
+                // Handle status field - can be either string ("succeeded", "aborted", etc.) or int (4, 5, 6)
+                bool success = false;
+                string statusStr = "unknown";
+                statusStr = result["status"].ToString().ToLower();
+                success = statusStr == "succeeded" || statusStr == "success";
+                Debug.Log($"{actionDescription} {(success ? "SUCCESS" : "FAILED")} (status: {statusStr})");
                 onComplete?.Invoke(success);
             }
         );
@@ -215,6 +232,22 @@ public class ROS2DataPublisher : MonoBehaviour
     public void CallTeleopStart(Action<bool> onComplete = null)
     {
         ExecuteBehaviorTree("EnterTeleopModeBT", "teleop_start", onComplete);
+    }
+
+    /// <summary>
+    /// Call ROS service to start movebase control
+    /// </summary>
+    public void CallMovebaseModeStart(Action<bool> onComplete = null)
+    {
+        ExecuteBehaviorTree("EnterMovebaseModeBT", "movebase_control_start", onComplete);
+    }
+
+    /// <summary>
+    /// Call ROS service to stop movebase control
+    /// </summary>
+    public void CallMovebaseModeStop(Action<bool> onComplete = null)
+    {
+        ExecuteBehaviorTree("ExitMovebaseModeBT", "movebase_control_stop", onComplete);
     }
 
     /// <summary>

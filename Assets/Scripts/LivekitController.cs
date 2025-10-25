@@ -19,6 +19,7 @@ public class LivekitController : MonoBehaviour
 
     // Teleop state
     private bool inTeleopMode = false;
+    private bool inMovebaseControlMode = false;
 
     void Start()
     {
@@ -32,6 +33,11 @@ public class LivekitController : MonoBehaviour
         if (inTeleopMode && connectionManager.CurrentStatus == ConnectionStatus.RobotOnlineTeleop)
         {
             ros2Publisher?.PublishTeleopData();
+        }
+        // Publish movebase control data
+        else if (inMovebaseControlMode && connectionManager.CurrentStatus == ConnectionStatus.RobotOnlineMovebase)
+        {
+            ros2Publisher?.PublishMovebaseControlData();
         }
     }
 
@@ -103,6 +109,7 @@ public class LivekitController : MonoBehaviour
                 break;
             case ConnectionStatus.RobotOnlineIdle:
             case ConnectionStatus.RobotOnlineTeleop:
+            case ConnectionStatus.RobotOnlineMovebase:
                 Disconnect();
                 break;
         }
@@ -183,6 +190,61 @@ public class LivekitController : MonoBehaviour
         inTeleopMode = false;
         connectionManager?.CheckRobotOnlineStatus();
         Debug.Log("Teleop mode stopped");
+    }
+
+    #endregion
+
+    # region Movebase Control
+
+    /// <summary>
+    /// Start movebase control mode
+    /// </summary>
+    public void onClickMovebaseControl()
+    {
+        if (inMovebaseControlMode)
+        {
+            StopMovebaseControl();
+        } else
+        {
+            StartMovebaseControl();
+        }
+        return;
+    }
+
+    private void StartMovebaseControl()
+    {
+        // Call ROS service to start movebase control
+        ros2Publisher?.CallMovebaseModeStart((success) =>
+        {
+            if (success)
+            {
+                inMovebaseControlMode = true;
+                connectionManager?.SetConnectionStatus(ConnectionStatus.RobotOnlineMovebase);
+                Debug.Log("Movebase control mode started successfully");
+            }
+            else
+            {
+                Debug.LogError("Failed to start movebase control mode");
+            }
+        });
+    }
+
+    private void StopMovebaseControl()
+    {
+        // Call ROS service to stop movebase control
+        ros2Publisher?.CallMovebaseModeStop((success) =>
+        {
+            if (success)
+            {
+                inMovebaseControlMode = false;
+                connectionManager?.SetConnectionStatus(ConnectionStatus.RobotOnlineIdle);
+                Debug.Log("Movebase control mode stopped successfully");
+            }
+            else
+            {
+                Debug.LogError("Failed to stop movebase control mode");
+            }
+        });
     }
 
     #endregion

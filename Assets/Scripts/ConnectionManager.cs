@@ -15,7 +15,8 @@ public enum ConnectionStatus
     Disconnected,               // Not connected
     RoomConnectedRobotOffline, // Connected to room but robot is offline
     RobotOnlineIdle,           // Robot is online but not in teleop mode
-    RobotOnlineTeleop          // Robot is online and in teleop mode
+    RobotOnlineTeleop,        // Robot is online and in teleop mode
+    RobotOnlineMovebase       // Robot is online and in movebase control mode
 }
 
 /// <summary>
@@ -98,6 +99,13 @@ public class ConnectionManager : MonoBehaviour
                 buttonText = "Disconnect Robot",
                 infoText = "Teleop Mode Active - Press B to stop",
                 statusColor = Color.cyan
+            },
+            [ConnectionStatus.RobotOnlineMovebase] = new StatusConfig
+            {
+                statusText = "Movebase Control",
+                buttonText = "Disconnect Robot",
+                infoText = "Movebase Control Mode Active",
+                statusColor = Color.blue
             }
         };
     }

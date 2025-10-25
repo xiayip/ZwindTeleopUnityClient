@@ -146,6 +146,14 @@ public class Livekit : MonoBehaviour
     }
 
     /// <summary>
+    /// start movebase control - backward compatible
+    /// </summary>
+    public void onClickMovebaseControl()
+    {
+        livekitController?.onClickMovebaseControl();
+    }
+
+    /// <summary>
     /// Get connection manager component - for accessing connection status
     /// </summary>
     public ConnectionManager GetConnectionManager()
