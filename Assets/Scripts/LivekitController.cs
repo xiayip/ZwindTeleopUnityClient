@@ -187,9 +187,26 @@ public class LivekitController : MonoBehaviour
     /// </summary>
     private void StopTeleop()
     {
-        inTeleopMode = false;
-        connectionManager?.CheckRobotOnlineStatus();
-        Debug.Log("Teleop mode stopped");
+        if (connectionManager?.CurrentStatus != ConnectionStatus.RobotOnlineTeleop)
+        {
+            Debug.LogWarning("Cannot stop teleop - robot not in teleop state");
+            return;
+        }
+
+        // Call ROS service to stop teleop
+        ros2Publisher?.CallTeleopStop((success) =>
+        {
+            if (success)
+            {
+                inTeleopMode = false;
+                connectionManager?.SetConnectionStatus(ConnectionStatus.RobotOnlineIdle);
+                Debug.Log("Teleop mode stopped successfully");
+            }
+            else
+            {
+                Debug.LogError("Failed to stop teleop mode");
+            }
+        });
     }
 
     #endregion

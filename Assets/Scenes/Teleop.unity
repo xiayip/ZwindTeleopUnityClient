@@ -183,7 +183,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Livekit
   _url: wss://livekit.zwind-robot.com
   _token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjIxMjA2MzA5NDMsImlkZW50aXR5IjoidnIiLCJpc3MiOiJBUElIdEdUYVV2YzlGNHkiLCJuYW1lIjoidnIiLCJuYmYiOjE3NjA2MzQ1NDMsInN1YiI6InZyIiwidmlkZW8iOnsicm9vbSI6InRlc3Rfcm9vbSIsInJvb21Kb2luIjp0cnVlfX0.j6HIfGId5GIVFjY0th28XneEgDiQ0Vixqf63rehnGr4
-  _videoStreamObject: {fileID: 446980018}
+  _videoStreamObject: {fileID: 1593585537}
   _infoText: {fileID: 802393867}
   _connectStatusText: {fileID: 1643071327}
   _buttonStatusText: {fileID: 1932851425}
@@ -1472,11 +1472,6 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 708bb04189b8488418aa725e7f94bbe8, type: 3}
---- !u!1 &446980018 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 462594702063903169, guid: bd5ed150cc853b1478ce334a3cbc7ca3, type: 3}
-  m_PrefabInstance: {fileID: 4243574543177829711}
-  m_PrefabAsset: {fileID: 0}
 --- !u!1 &490211882 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 100006, guid: 126d619cf4daa52469682f85c1378b4a, type: 3}
@@ -2995,6 +2990,11 @@ MonoBehaviour:
 Transform:
   m_CorrespondingSourceObject: {fileID: 7694722661177258051, guid: d2e1b9213f12a5541a29057b5f119c6f, type: 3}
   m_PrefabInstance: {fileID: 3803626337934619740}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &1593585537 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 132716974973632813, guid: bd5ed150cc853b1478ce334a3cbc7ca3, type: 3}
+  m_PrefabInstance: {fileID: 4243574543177829711}
   m_PrefabAsset: {fileID: 0}
 --- !u!1 &1633707130
 GameObject:

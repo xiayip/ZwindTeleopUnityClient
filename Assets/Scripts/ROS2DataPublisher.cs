@@ -45,7 +45,7 @@ public class ROS2DataPublisher : MonoBehaviour
 
         bridgeManager = new LiveKitROS2BridgeManager(room);
         cmdVelPublisher = bridgeManager.CreatePublisher<TwistMessage>("cmd_vel");
-        eePosePublisher = bridgeManager.CreatePublisher<PoseStampedMessage>("ee_offset_pose");
+        eePosePublisher = bridgeManager.CreatePublisher<PoseStampedMessage>("servo_node/pose_target_cmds");
         eeTwistPublisher = bridgeManager.CreatePublisher<TwistStampedMessage>("servo_node/delta_twist_cmds");
         gripperPublisher = bridgeManager.CreatePublisher<JointStateMessage>("main_gripper/gripper_command");
 
@@ -232,6 +232,14 @@ public class ROS2DataPublisher : MonoBehaviour
     public void CallTeleopStart(Action<bool> onComplete = null)
     {
         ExecuteBehaviorTree("EnterTeleopModeBT", "teleop_start", onComplete);
+    }
+
+    /// <summary>
+    /// Call ROS service to stop teleop
+    /// </summary>
+    public void CallTeleopStop(Action<bool> onComplete = null)
+    {
+        ExecuteBehaviorTree("ExitTeleopModeBT", "teleop_stop", onComplete);
     }
 
     /// <summary>
