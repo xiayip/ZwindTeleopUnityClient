@@ -1,6 +1,7 @@
 using LiveKitROS2Bridge;
 using System;
 using System.Collections.Generic;
+using System.Text.Json;
 using UnityEngine;
 
 /// <summary>
@@ -48,7 +49,7 @@ public class ROS2DataPublisher : MonoBehaviour
         eePosePublisher = bridgeManager.CreatePublisher<PoseStampedMessage>("servo_node/pose_target_cmds");
         eeTwistPublisher = bridgeManager.CreatePublisher<TwistStampedMessage>("servo_node/delta_twist_cmds");
         gripperPublisher = bridgeManager.CreatePublisher<JointStateMessage>("main_gripper/gripper_command");
-
+        bridgeManager.SubscribeTopic("/pose", pose_callback);
         Debug.Log("ROS2 publishers initialized");
     }
 
@@ -224,6 +225,42 @@ public class ROS2DataPublisher : MonoBehaviour
 
         Debug.Log($"{actionDescription} action goal sent (ID: {goalId})");
         return goalId;
+    }
+    
+    private void pose_callback(Dictionary<string, object> message)
+    {
+        try
+        {
+            // Fast path: Direct JSON deserialization if it's a JsonElement
+            if (message.TryGetValue("data", out var dataObj) && dataObj is JsonElement dataElement)
+            {
+                // Use JsonDocument for efficient parsing
+                using var doc = JsonDocument.Parse(dataElement.GetRawText());
+                var root = doc.RootElement;
+                // Extract position - direct property access
+                if (root.TryGetProperty("position", out var pos))
+                {
+                    float x = pos.TryGetProperty("x", out var xProp) ? xProp.GetSingle() : 0f;
+                    float y = pos.TryGetProperty("y", out var yProp) ? yProp.GetSingle() : 0f;
+                    float z = pos.TryGetProperty("z", out var zProp) ? zProp.GetSingle() : 0f;
+                    // Extract orientation
+                    if (root.TryGetProperty("orientation", out var orient))
+                    {
+                        float qx = orient.TryGetProperty("x", out var qxProp) ? qxProp.GetSingle() : 0f;
+                        float qy = orient.TryGetProperty("y", out var qyProp) ? qyProp.GetSingle() : 0f;
+                        float qz = orient.TryGetProperty("z", out var qzProp) ? qzProp.GetSingle() : 0f;
+                        float qw = orient.TryGetProperty("w", out var qwProp) ? qwProp.GetSingle() : 1f;
+                        
+                        Debug.Log($"Pose: Pos({x:F3}, {y:F3}, {z:F3}), Quat({qx:F3}, {qy:F3}, {qz:F3}, {qw:F3})");
+                    }
+                }
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"Error parsing pose: {ex.Message}");
+        }
     }
 
     /// <summary>

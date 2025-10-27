@@ -318,6 +318,8 @@ namespace LiveKitROS2Bridge
 
         private readonly Dictionary<string, Action<Dictionary<string, object>>> _serviceResponseCallbacks;
         private readonly Dictionary<string, ROS2ActionCallbacks> _actionCallbacks;
+        private readonly Dictionary<string, Action<Dictionary<string, object>>> _topicSubscribers;
+        
         public Room Room => _room;
         public bool IsConnected => _room?.ConnectionState == ConnectionState.ConnConnected;
 
@@ -327,6 +329,7 @@ namespace LiveKitROS2Bridge
             _publishers = new Dictionary<string, object>();
             _serviceResponseCallbacks = new Dictionary<string, Action<Dictionary<string, object>>>();
             _actionCallbacks = new Dictionary<string, ROS2ActionCallbacks>();
+            _topicSubscribers = new Dictionary<string, Action<Dictionary<string, object>>>();
 
             _jsonOptions = new JsonSerializerOptions
             {
@@ -363,6 +366,39 @@ namespace LiveKitROS2Bridge
             _publishers[key] = publisher;
 
             return publisher;
+        }
+
+        /// <summary>
+        /// Subscribe to a ROS2 topic
+        /// </summary>
+        public void SubscribeTopic(string topicName, Action<Dictionary<string, object>> messageCallback)
+        {
+            if (messageCallback == null)
+            {
+                throw new ArgumentNullException(nameof(messageCallback));
+            }
+
+            _topicSubscribers[topicName] = messageCallback;
+            Debug.Log($"Subscribed to topic: {topicName}");
+        }
+
+        /// <summary>
+        /// Unsubscribe from a ROS2 topic
+        /// </summary>
+        public void UnsubscribeTopic(string topicName)
+        {
+            if (_topicSubscribers.Remove(topicName))
+            {
+                Debug.Log($"Unsubscribed from topic: {topicName}");
+            }
+        }
+
+        /// <summary>
+        /// Check if subscribed to a topic
+        /// </summary>
+        public bool IsSubscribedToTopic(string topicName)
+        {
+            return _topicSubscribers.ContainsKey(topicName);
         }
 
         /// <summary>
@@ -491,7 +527,12 @@ namespace LiveKitROS2Bridge
                 {
                     var packetType = packet["packetType"].ToString();
 
-                    if (packetType == "ros2_service_response")
+                    if (packetType == "ros2_message")
+                    {
+                        // Handle ROS2 topic message
+                        HandleTopicMessage(packet);
+                    }
+                    else if (packetType == "ros2_service_response")
                     {
                         // Handle ROS2 service response
                         HandleServiceResponse(packet);
@@ -516,6 +557,26 @@ namespace LiveKitROS2Bridge
             catch (Exception ex)
             {
                 Console.WriteLine($"Error occurred while processing data: {ex.Message}");
+            }
+        }
+
+        private void HandleTopicMessage(Dictionary<string, object> packet)
+        {
+            try
+            {
+                if (packet.ContainsKey("topicName"))
+                {
+                    string topicName = packet["topicName"].ToString();
+
+                    if (_topicSubscribers.TryGetValue(topicName, out var callback))
+                    {
+                        callback?.Invoke(packet);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Error processing topic message: {ex.Message}");
             }
         }
 
@@ -624,6 +685,7 @@ namespace LiveKitROS2Bridge
             }
             _serviceResponseCallbacks?.Clear();
             _actionCallbacks?.Clear();
+            _topicSubscribers?.Clear();
         }
     }
 
